@@ -4,7 +4,7 @@ library(sf)
 library(rgdal)
 library(raster)
 library(magrittr)
-
+source(here::here("R/sfc_as_cols.R"))
 # read in seagrass shapefiles. Special treatment for 2004 and 2006 shapefiles; which are in .e00 format
 sg <- NULL
 for (i in c(2001:2004, 2006:2015, 2017,2018)){
