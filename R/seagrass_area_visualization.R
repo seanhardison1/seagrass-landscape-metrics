@@ -9,7 +9,7 @@ library(tsibble)
 load(here::here("data/SouthBaySeagrass.rdata"))
 load(here::here("data/HogIslandBaySeagrass.rdata"))
 
-`# Time series of total seagrass area for South Bay
+# Time series of total seagrass area for South Bay
 
 sb_ts <- sb_sg %>% 
   dplyr::group_by(YEAR) %>% 
@@ -39,6 +39,5 @@ ggplot(sg_ts) +
   geom_point(aes(x = year, y = sg_area, color = bay)) +
   geom_line(aes(x = year, y = sg_area, color = bay))
 
-ggAcf(sg_ts)
 
 

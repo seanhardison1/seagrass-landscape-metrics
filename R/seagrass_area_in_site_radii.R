@@ -55,16 +55,16 @@ for (d in c(500, 1000,2000,3000)){
 }
 
 seagrass_coverage <- 
-sg_coverage %>% 
-  st_set_geometry(NULL) %>% 
-  mutate(year = as.numeric(as.character(year)),
-         site = as.factor(site)) %>% 
-  group_by(radius) %>% 
-  dplyr::select(-circle_area, -sg_area) %>% 
-  pivot_wider(names_from = radius,
-              names_prefix = "sg_cover_",
-              values_from = sg_cover,
-              names_sep = "_", values_fill = 0) 
+  sg_coverage %>% 
+    st_set_geometry(NULL) %>% 
+    mutate(year = as.numeric(as.character(year)),
+           site = as.factor(site)) %>% 
+    group_by(radius) %>% 
+    dplyr::select(-circle_area, -sg_area) %>% 
+    pivot_wider(names_from = radius,
+                names_prefix = "sg_cover_",
+                values_from = sg_cover,
+                names_sep = "_", values_fill = 0) 
 
 
 save(seagrass_coverage, file = here::here("data/seagrass_cover.rdata"))
