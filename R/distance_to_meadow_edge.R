@@ -49,8 +49,7 @@ for (i in 2012:2018){
      
      output <- site_dist %>% 
        mutate(sg_dist = as.numeric(st_distance(.,sg_multipoint)),
-              is_inside = ifelse(inside == 1, TRUE, FALSE),
-              sg_dist = ifelse(is_inside, sg_dist * -1, sg_dist))
+              is_inside = ifelse(inside == 1, TRUE, FALSE))
       
      assign("sg_dist", rbind(
        sg_dist,
@@ -68,12 +67,23 @@ sg_dist %<>%
            ifelse(str_detect(site, "SB") &
                     year %in% c(2014, 2016),
                   NA,
-                  sg_dist)))
+                  sg_dist)),
+    year = as.numeric(as.character(year)),
+    sg_dist = ifelse(is_inside, sg_dist * -1, sg_dist)) %>% 
+  tsibble(index = year, key = c(season, site)) %>%
+  mutate(site = as.character(site)) %>% 
+  fill_gaps() %>% 
+  mutate(across(contains('sg_dist'), 
+                .fns = list(interp = ~na.interp(., linear = T))),
+         interp = ifelse(is.na(sg_dist), TRUE, FALSE),
+         meadow = str_extract(site, "(?:(?!_).)*"))
 
 ggplot(data = sg_dist %>% 
-         filter(season == "summer",
-                str_detect(site, "Bare"))) +
-  geom_point(aes(x  = year, y = sg_dist, color = is_inside))
+         filter(season == "summer") )+
+  geom_line(aes(x = year, y = sg_dist_interp, group = site), color = "purple") +
+  geom_point(aes(x = year, y = sg_dist_interp, group = site), color = "purple") +
+  geom_line(aes(x = year, y = sg_dist, color = meadow, group = site)) +
+  geom_point(aes(x = year, y = sg_dist, color = meadow, group = site)) 
 
 save(sg_dist, file = here::here("data/distance_to_meadow_edges.rdata"))
 
