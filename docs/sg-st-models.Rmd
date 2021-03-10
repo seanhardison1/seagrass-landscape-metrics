@@ -1,0 +1,113 @@
+---
+title: "Interpolating gaps in seagrass aerial imagery with spatiotemporal models"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, message = F, warning = F)
+library(sdmTMB)
+library(sf)
+library(tidyverse)
+library(glmmTMB)
+library(mgcv)
+library(gratia)
+library(raster)
+library(magrittr)
+
+load(here::here("data/bound_sg.rdata"))
+load(here::here("data/processed_dem.rdata"))
+process <- F
+
+```
+
+### Visualizing covariates
+
+Digital elevation model of the VCR
+
+```{r}
+plot(dem_resample)
+```
+
+Normalized shoot density distributions through time
+
+```{r}
+ggplot(sg_bound) +
+  geom_violin(aes(x = year, y = shoots, group = factor(year))) +
+  labs(y = "Normalized shoot density",
+       x = "Year") +
+  theme_minimal()
+```
+
+Normalized shoot density time series by site
+
+```{r}
+sg_bound %>% 
+  mutate(meadow = ifelse(str_detect(SiteName, "SB"), "SB", "HI")) %>% 
+  group_by(year, meadow, SiteName) %>%
+  dplyr::summarise(mean_dens = mean(shoots, na.rm = T),
+                   sd_dens = sd(shoots,  na.rm = T)) %>% 
+  ggplot() +
+    geom_line(aes(x = year, y = mean_dens, color = meadow, group = SiteName)) +
+  scale_x_discrete(expand = c(0.01, 0.01)) +
+  ggsci::scale_color_aaas() +
+  theme_minimal() +
+  labs(y = "Normalized shoot density",
+       x = "Year")
+```
+
+### Spatiotemporal model
+
+```{r, echo = T}
+mod1 <- 
+  gam(shoots_raw ~ s(depth) +
+        vims_dens +
+               te(longitude, latitude) + 
+        te(longitude, latitude, by = year),
+      data = sg_bound,
+      family = "nb")
+```
+
+#### Validate
+
+```{r}
+summary(mod1)
+appraise(mod1)
+```
+
+#### Predict
+
+```{r}
+if (process){
+  pred <- cbind(dem_df,
+                predict(mod1, 
+                        dem_df, 
+                        se.fit=F, 
+                        type="response"))
+    names(pred)[6] <- "pred"
+    save(pred, file = here::here("data/pred_df.rdata"))
+} else {
+  load(here::here("data/pred_df.rdata"))
+}
+```
+
+```{r}
+vims_aerial <-vims_sg_proc %>% 
+                  filter(year == 2018) %>% 
+  st_crop(.,ymax = 4130000, ymin = 4116365,
+          xmin = 420766.4, xmax = 441462.3)
+
+t <- pred %>% filter(latitude < 4130000) %>% 
+  mutate(pred = ifelse(pred < 1, 0, pred),
+         sg_pres = factor(ifelse(pred == 0, 0, 1)))
+
+ggplot() +
+  geom_tile(data =t, aes(longitude, latitude, fill = pred)) +
+  geom_tile(data =t[t$sg_pres == 0,], aes(longitude, latitude), fill = "grey") +
+  ggsci::scale_fill_material("teal") +
+  geom_sf(data = vims_aerial, fill = "transparent", size = 0.25, color = "black") +
+  theme_minimal() +
+  labs(title = "Predicted seagrass density (shoots m^-2)")
+  # coord_sf(ylim = c(37.1, 37.25),
+  #          xlim = c(-75.9, -75.79))
+```
+
