@@ -135,7 +135,7 @@ p1 + p2
 ```
 
 ```{r, out.width = "60%"}
-knitr::include_graphics("../images/mvnorm.png")
+knitr::include_graphics("images/mvnorm.png")
 ```
 
 ---
@@ -148,7 +148,7 @@ p1 + p2
 ```
 
 ```{r, out.width = "60%"}
-knitr::include_graphics("../images/mvnorm2.png")
+knitr::include_graphics("images/mvnorm2.png")
 ```
 
 ---
@@ -389,7 +389,7 @@ $$h(s, \phi) = \text{exp}(-\frac{s}{\phi}),$$
 where $\phi$ is called the **range** and $s$ is the distance between two points.
 
 ```{r}
-knitr::include_graphics("../images/variogram_functions.png")
+knitr::include_graphics("images/variogram_functions.png")
 ```
 
 ---
@@ -399,7 +399,7 @@ knitr::include_graphics("../images/variogram_functions.png")
 Plugging in the values for the off-diagonal elements gives us a new residual covariance matrix $\pmb{\Sigma}$ (shown here as a correlation matrix):
 
 ```{r, out.width="50%"}
-knitr::include_graphics("../images/exp_corr_mat.png")
+knitr::include_graphics("images/exp_corr_mat.png")
 ```
 
 This matters because we use the new $\pmb{\Sigma}$ to estimate model parameters ( $\hat{\beta}$, standard errors)
