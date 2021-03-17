@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+  <head>
+    <title>Spatial modeling with sdmTMB</title>
+    <meta charset="utf-8" />
+    <script src="libs/header-attrs-2.6/header-attrs.js"></script>
+    <link href="libs/remark-css-0.0.1/default.css" rel="stylesheet" />
+    <link href="libs/remark-css-0.0.1/default-fonts.css" rel="stylesheet" />
+  </head>
+  <body>
+    <textarea id="source">
+class: center, middle, inverse, title-slide
+
+# Spatial modeling with sdmTMB
+
+---
+
+
+
+
+## Spatial modeling with sdmTMB
+
+1. Variance and covariance
+
+2. Dealing with spatially correlated errors in regression models
+
+3. Considering space explicitly with spatial random effects
+
+4. A worked example with synoptic data and `sdmTMB`
+
+---
+
+
+
+### What does it mean to be "drawn from a Normal distribution"?
+
+We sample oyster densities from 30 0.5m&lt;sup&gt;2&lt;/sup&gt; quadrats along a reef.
+
+Observed densities are
+
+&lt;img src="spatstat-sdmtmb_files/figure-html/unnamed-chunk-3-1.png" style="display: block; margin: auto;" /&gt;
+
+---
+
+### What does it mean to be "drawn from a Normal distribution"?
+
+We can characterize the distribution of observations using a model -&gt; the **normal or Gaussian** distribution
+
+`$$\text{oyster density} \sim N(\mu, \sigma^2)$$`
+All we need are estimates of a **mean** `\(\mu\)` and a **variance** `\(\sigma^2\)` to build the model
+
+--
+
+&lt;img src="spatstat-sdmtmb_files/figure-html/unnamed-chunk-4-1.png" style="display: block; margin: auto;" /&gt;
+
+"drawn from" = "comes from" = `\(\sim\)`
+
+???
+We would expect future random samples of oysters from this age population to be distributed according to this model
+
+---
+### Extending the Gaussian to multiple dimensions
+
+The relationship between **two** normally distributed variables is described by the **multivariate normal** distribution. 
+
+
+&lt;img src="spatstat-sdmtmb_files/figure-html/unnamed-chunk-5-1.png" style="display: block; margin: auto;" /&gt;
+
+&lt;img src="/Users/seanhardison/Documents/git/seagrass-landscape-metrics/images/mvnorm.png" width="60%" style="display: block; margin: auto;" /&gt;
+
+---
+### Extending the Gaussian to multiple dimensions
+
+The relationship between **two** normally distributed variables is described by the **multivariate normal** distribution. 
+
+&lt;img src="spatstat-sdmtmb_files/figure-html/unnamed-chunk-7-1.png" style="display: block; margin: auto;" /&gt;
+
+&lt;img src="/Users/seanhardison/Documents/git/seagrass-landscape-metrics/images/mvnorm2.png" width="60%" style="display: block; margin: auto;" /&gt;
+
+---
+### Oyster densities in space
+
+After our first sample, we move to a different barrier island and repeat the sampling. We then return to the original site and sample a reef 10 m away from the first site. 
+
+**How would you expect our original sample to covary with the new data?**
+
+--
+
+&lt;img src="spatstat-sdmtmb_files/figure-html/unnamed-chunk-9-1.png" style="display: block; margin: auto;" /&gt;
+
+Oyster densities at nearby sites covary according to some unmeasured process (predation? exposure?)
+
+---
+
+### Spatial autocorrelation 
+
+**Tobler's first law of geography:** "Everything is related to everything else, but near things are more related than distant things."
+
+--
+
+* In regression, we want covariates to explain dependency structures in relationships (environmental gradient explain oyster densities)
+
+--
+
+* Oftentimes, what's left over from regression (residual errors) aren't randomly distributed as expected, but **covary according to some unmeasured spatial process**
+
+--
+
+* **Spatially autocorrelated** regression residuals violate the assumption of residual independence 
+
+* **A form of pseudoreplication** 
+
+--
+
+## How do we typically deal with spatially autocorrelated error?
+
+---
+
+### Generalized least squares
+
+* One way is with **GLS**
+
+* GLS methods use a similar approach to deal with spatial and temporal autocorrelation in residuals
+
+--
+
+Here's a regression model to consider
+
+`$$\text{seagrass density}_i = \beta_0 + \text{elevation}_i\beta_1 + \varepsilon_i,$$`
+&lt;img src="spatstat-sdmtmb_files/figure-html/unnamed-chunk-10-1.png" width="80%" style="display: block; margin: auto;" /&gt;
+---
+
+### Generalized least squares
+
+Question: is there spatial autocorrelation in model residuals?
+
+Option 1: Make a visual assessment of residual spatial autocorrelation
+
+&lt;img src="spatstat-sdmtmb_files/figure-html/unnamed-chunk-11-1.png" style="display: block; margin: auto;" /&gt;
+
+---
+### Generalized least squares
+
+Question: is there spatial autocorrelation in model residuals?
+
+Option 2: Assess residual autocorrelation with **sample variogram**
+
+&lt;img src="spatstat-sdmtmb_files/figure-html/unnamed-chunk-12-1.png" style="display: block; margin: auto;" /&gt;
+
+--
+
+**Semivariance:** a measure of the dependence between two observations as a function of distance
+
+* High semivariance -&gt; low dependence
+---
+### Generalized least squares
+
+We think residual spatial autocorrelation is a problem, so we'll fit a GLS model.
+
+--
+
+To see how this works, first reinterpret the original model in matrix notation:
+
+`$$\text{seagrass density}_i = \pmb{X_i}\beta + \varepsilon_i,$$`
+
+--
+
+`\(\text{seagrass density}_i\)` = vector of *seagrass density&lt;sub&gt;1&lt;/sub&gt;, ..., seagrass density&lt;sub&gt;45&lt;/sub&gt;* observations  
+  
+--
+  
+`\(\pmb{X_i}\)` = a two-column matrix with the first column equal to 1 and the second containing all observations of covariate **elevation**
+
+--
+
+`\(\beta\)` = vector containing parameter estimates ( `\(\beta_0\)` and `\(\beta_1\)`)
+
+--
+
+`\(\varepsilon_i\)` = a vector of model residuals
+
+---
+
+### Generalized least squares
+
+The statement `\(\varepsilon \sim N(0, \sigma^2)\)` can be reinterpreted in terms of covariance as 
+
+`$$\pmb{\varepsilon} \sim N(0, \sigma^2\pmb{I}),$$`
+where `\(\pmb{I}\)` is a *n x n* identity matrix and `\(\pmb{\Sigma} = \sigma^2\pmb{I}\)`
+
+* Identity matrix - a matrix where the diagonal elements are 1 and off-diagonal elements are 0
+
+--
+
+```
+##      [,1] [,2] [,3] [,4] [,5] [,6]
+## [1,]    1    0    0    0    0    0
+## [2,]    0    1    0    0    0    0
+## [3,]    0    0    1    0    0    0
+## [4,]    0    0    0    1    0    0
+## [5,]    0    0    0    0    1    0
+## [6,]    0    0    0    0    0    1
+```
+
+
+(First 6 rows and columns)
+---
+### Generalized least squares
+
+The statement `\(\varepsilon \sim N(0, \sigma^2)\)` can be reinterpreted in terms of covariance as 
+
+`$$\pmb{\varepsilon} \sim N(0, \sigma^2\pmb{I}),$$`
+where `\(\pmb{I}\)` is a *n x n* identity matrix and `\(\pmb{\Sigma} = \sigma^2\pmb{I}\)`
+
+
+In the model, we estimated the residual variance term to be 110.302, so the residual covariance matrix is `\(\sigma^2 I\)` or
+
+
+```
+##         [,1]    [,2]    [,3]    [,4]    [,5]    [,6]
+## [1,] 110.302   0.000   0.000   0.000   0.000   0.000
+## [2,]   0.000 110.302   0.000   0.000   0.000   0.000
+## [3,]   0.000   0.000 110.302   0.000   0.000   0.000
+## [4,]   0.000   0.000   0.000 110.302   0.000   0.000
+## [5,]   0.000   0.000   0.000   0.000 110.302   0.000
+## [6,]   0.000   0.000   0.000   0.000   0.000 110.302
+```
+
+(First 6 rows and columns)
+
+---
+
+### Generalized least squares
+
+* The off-diagonal zero terms represent our assumption of independence. 
+
+--
+
+* We've established that we are violating this assumption, so we need a new **correlation function** to calculate the off-diagonal elements of the covariance matrix.
+
+--
+
+The exponential correlation function is:
+
+`$$h(s, \phi) = \text{exp}(-\frac{s}{\phi}),$$`
+where `\(\phi\)` is called the **range** and `\(s\)` is the distance between two points.
+
+&lt;img src="/Users/seanhardison/Documents/git/seagrass-landscape-metrics/images/variogram_functions.png" width="847" style="display: block; margin: auto;" /&gt;
+
+---
+
+### Generalized least squares
+
+Plugging in the values for the off-diagonal elements gives us a new residual covariance matrix `\(\pmb{\Sigma}\)` (shown here as a correlation matrix):
+
+&lt;img src="/Users/seanhardison/Documents/git/seagrass-landscape-metrics/images/exp_corr_mat.png" width="50%" style="display: block; margin: auto;" /&gt;
+
+This matters because we use the new `\(\pmb{\Sigma}\)` to estimate model parameters ( `\(\hat{\beta}\)`, standard errors)
+
+$$\hat{\beta} = (\pmb{X}^T \times \pmb{\Sigma}^{-1}\times \pmb{X})^{-1} \times \pmb{X}^T \times \pmb{\Sigma}^{-1} \times y $$
+---
+
+### Generalized least squares
+
+Fit the model and check for residual spatial autocorrelation
+
+
+```r
+mod2 &lt;- gls(shoots ~ elevation, data = sg_df, method = "REML",
+           correlation = corExp(form = ~longitude+latitude))
+sg_df$res &lt;- resid(mod2, type = "n")
+```
+
+&lt;img src="spatstat-sdmtmb_files/figure-html/unnamed-chunk-18-1.png" style="display: block; margin: auto;" /&gt;
+
+
+---
+
+### Another solution: Spatial random effects
+
+* GLS imposes a correlation structure on the residual covariance matrix `\(\pmb{\Sigma}\)`, but it's often not enough to account for residual autocorrelation
+
+--
+
+The **spatial random effects** model:
+
+`$$\text{seagrass density}_i = \pmb{X_i}\beta + u_i + \varepsilon_i$$`
+`$$\pmb{\varepsilon} \sim N(0, \sigma^2\pmb{I})$$`
+`$$\pmb{u} \sim N(0, \pmb{\Omega})$$`
+where `\(\varepsilon_i\)` are random errors and `\(u_i\)` are the spatial random effects with mean 0 and covariance `\(\pmb{\Omega}\)`.
+
+--
+
+* Spatial random effects = random intercepts with imposed correlation structure (think GLS correlation structures)
+
+* Spatial random effects are **latent** variables. 
+
+* Represent unmeasured things affecting your data ("habitat quality")
+
+&lt;!-- Imagine we collect fish with seine nets in ten locations --&gt;
+
+&lt;!-- ```{r, echo = F, fig.align='center', fig.width=10, fig.height = 5, out.width="80%", message=F, warning=F} --&gt;
+&lt;!-- Nsite &lt;- 10 --&gt;
+&lt;!-- Nobs_per_site &lt;- 10 --&gt;
+&lt;!-- Site_logMean &lt;- log(10) #this occur in log space --&gt;
+&lt;!-- Site_logSd &lt;- 1 #this occurs in log space --&gt;
+
+&lt;!-- # Bookkeeping - indicator for observations belonging to each site --&gt;
+&lt;!-- s_i &lt;- rep( 1:Nsite, each=Nobs_per_site) --&gt;
+
+&lt;!-- # Simulation --&gt;
+
+&lt;!-- z_s &lt;- rnorm( Nsite, mean=0, sd=Site_logSd ) #what's the value of the random effect for each of the 10 sites? --&gt;
+&lt;!-- Mean_s &lt;- exp( Site_logMean + z_s ) #Simulate mean counts of each site by exponentiating (how many rabbits) --&gt;
+&lt;!-- y_i &lt;- rpois( Nsite*Nobs_per_site, lambda=Mean_s[s_i] ) # the data --&gt;
+
+&lt;!-- df &lt;- tibble(cpue = y_i, --&gt;
+&lt;!--        site = factor(rep(1:10, each = 10)), --&gt;
+&lt;!--        x = rep(rnorm(10), each = 10), --&gt;
+&lt;!--        y = rep(rnorm(10), each = 10)) --&gt;
+
+&lt;!-- catch &lt;-  --&gt;
+&lt;!--   ggplot(df) + --&gt;
+&lt;!--   geom_boxplot(aes(x = site, y = cpue)) + --&gt;
+&lt;!--   labs(y = "CPUE", --&gt;
+&lt;!--        title = "CPUE at each location") + --&gt;
+&lt;!--   theme(title = element_text(size = 16), --&gt;
+&lt;!--         axis.title = element_text(size = 16)) --&gt;
+
+&lt;!-- map &lt;-  --&gt;
+&lt;!--   ggplot(df) + --&gt;
+&lt;!--   geom_point(aes(x = x, y = y)) + --&gt;
+&lt;!--   labs(title = "Site locations") + --&gt;
+&lt;!--   theme(title = element_text(size = 16), --&gt;
+&lt;!--         axis.title = element_text(size = 16)) --&gt;
+
+&lt;!-- map + catch + plot_layout(nrow = 1) --&gt;
+&lt;!-- ``` --&gt;
+
+&lt;!-- We want to account for unmeasured variability across sites, so we assign random intercepts for each site. --&gt;
+
+&lt;!-- `$$c_i \sim \text{Poisson}(\lambda_i)$$` --&gt;
+&lt;!-- `$$\pmb{\lambda_i} = \text{exp}(\pmb{X_i}\pmb{\beta} + \pmb{z_ib})$$` --&gt;
+&lt;!-- `$$\pmb{b} \sim Normal(0, \sigma_{b}^2)$$` --&gt;
+&lt;!-- --- --&gt;
+
+&lt;!-- ### Random intercept model --&gt;
+
+&lt;!-- ```{r} --&gt;
+&lt;!-- library(lme4) --&gt;
+&lt;!-- mod &lt;- glmer(cpue ~ 1 + (1|site), family = "poisson", data = df) --&gt;
+&lt;!-- df$pred &lt;- predict(mod, type = "response") --&gt;
+&lt;!-- df$int &lt;- exp(fixed.effects(mod)) --&gt;
+&lt;!-- ``` --&gt;
+
+&lt;!-- ```{r, fig.width=8, fig.height=5} --&gt;
+&lt;!-- ggplot(df) + --&gt;
+&lt;!--   geom_hline(aes(yintercept = int), color = "purple") + --&gt;
+&lt;!--   geom_violin(aes(x = site, y = cpue)) + --&gt;
+&lt;!--   geom_point(aes(x = site, y = pred), color = "blue") + --&gt;
+&lt;!--   labs(title = "Observations, random intercepts (blue), and fixed intercept (purple)", --&gt;
+&lt;!--        y = "CPUE") + --&gt;
+&lt;!--     theme(title = element_text(size = 13), --&gt;
+&lt;!--         axis.title = element_text(size = 16)) --&gt;
+&lt;!-- ``` --&gt;
+
+
+
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"highlightStyle": "github",
+"highlightLines": true,
+"countIncrementalSlides": false
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();
+(function() {
+  "use strict"
+  // Replace <script> tags in slides area to make them executable
+  var scripts = document.querySelectorAll(
+    '.remark-slides-area .remark-slide-container script'
+  );
+  if (!scripts.length) return;
+  for (var i = 0; i < scripts.length; i++) {
+    var s = document.createElement('script');
+    var code = document.createTextNode(scripts[i].textContent);
+    s.appendChild(code);
+    var scriptAttrs = scripts[i].attributes;
+    for (var j = 0; j < scriptAttrs.length; j++) {
+      s.setAttribute(scriptAttrs[j].name, scriptAttrs[j].value);
+    }
+    scripts[i].parentElement.replaceChild(s, scripts[i]);
+  }
+})();
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+// adds .remark-code-has-line-highlighted class to <pre> parent elements
+// of code chunks containing highlighted lines with class .remark-code-line-highlighted
+(function(d) {
+  const hlines = d.querySelectorAll('.remark-code-line-highlighted');
+  const preParents = [];
+  const findPreParent = function(line, p = 0) {
+    if (p > 1) return null; // traverse up no further than grandparent
+    const el = line.parentElement;
+    return el.tagName === "PRE" ? el : findPreParent(el, ++p);
+  };
+
+  for (let line of hlines) {
+    let pre = findPreParent(line);
+    if (pre && !preParents.includes(pre)) preParents.push(pre);
+  }
+  preParents.forEach(p => p.classList.add("remark-code-has-line-highlighted"));
+})(document);</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>
