@@ -18,6 +18,7 @@ library(gstat)
 library(ggtext)
 library(patchwork)
 library(sdmTMB)
+library(INLA)
 library(magrittr)
 library(ggeffects)
 library(glmmTMB)
@@ -243,7 +244,7 @@ sg_df <- sg_bound %>%
                 longitude, latitude,
                 year, SiteName) %>% 
   st_set_geometry(NULL) %>% 
-  filter(shoots > 0, year == 2018, meadow == "HI")
+  filter(shoots > 0, year == 2017, meadow == "HI")
 
 mod <- gls(shoots ~ elevation, data = sg_df)
 
@@ -361,7 +362,7 @@ $$\pmb{\varepsilon} \sim N(0, \sigma^2\pmb{I}),$$
 where $\pmb{I}$ is a *n x n* identity matrix and $\pmb{\Sigma} = \sigma^2\pmb{I}$
 
 
-In the model, we estimated the residual variance term to be 110.302, so the residual covariance matrix is $\sigma^2 I$ or
+In the model, we estimated the residual variance term to be `r round(summary(mod)$sigma,1)`, so the residual covariance matrix is $\sigma^2 I$ or
 
 ```{r, echo = F}
 sigma <- summary(mod)$sigma
@@ -432,26 +433,89 @@ res1 + res2
 
 ---
 
-### Another solution: Spatial random effects
+### Spatial mixed effects models
 
 * GLS imposes a correlation structure on the residual covariance matrix $\pmb{\Sigma}$, but it's often not enough to account for residual autocorrelation
 
 --
 
-The **spatial random effects** model:
+**Things to be aware of**
 
-$$\text{seagrass density}_i = \pmb{X_i}\beta + u_i + \varepsilon_i$$
-$$\pmb{\varepsilon} \sim N(0, \sigma^2\pmb{I})$$
-$$\pmb{u} \sim N(0, \pmb{\Omega})$$
-where $\varepsilon_i$ are random errors and $u_i$ are the spatial random effects with mean 0 and covariance $\pmb{\Omega}$.
+* Samples of seagrass $(y)$ are collected at coordinates $s_1,...,s_n$, giving us $y(s_1),...,y(s_n)$
 
 --
 
-* Spatial random effects = random intercepts with imposed correlation structure (think GLS correlation structures)
+* Each $y(s_i)$ can be thought of as a random sample from a continuous random field called a **Gaussian field**
 
-* Spatial random effects are **latent** variables. 
+    * We're plucking out random intercepts from the field
+    
+--
 
-* Represent unmeasured things affecting your data ("habitat quality")
+* Realizations of the random field $u(s_i)$ are spatially correlated model residuals
+
+--
+
+* Because it's a **Gaussian** random field, the distribution of $u$ is defined by mean and covariance functions
+
+---
+
+Thus, the **spatial mixed effects** model is
+
+$$\mu(s_i) = X(s_i)\beta + u(s_i) + \varepsilon(s_i)$$
+$$\varepsilon \sim N(0, \sigma^2\pmb{I})$$
+$$u \sim GF(\pmb{0}, \pmb{\Sigma})$$
+where $\varepsilon_i$ are random errors and $u(s_i)$ are the spatial random effects with mean 0 and covariance $\pmb{\Sigma}$.
+
+--
+
+* The off-diagonal elements of $\pmb{\Sigma}$ are calculated using the Matérn correlation function
+
+--
+
+* When sample size is large, calculating $\pmb{\Sigma}$ is computationally expensive, so we use a shortcut to approximate the Gaussian field, called the **Gaussian Markov Random Field (GMRF)**
+
+$$u \sim \text{GMRF}(\pmb{0}, \pmb{\Sigma})$$
+---
+
+### Fitting the model with sdmTMB
+
+1. Define a mesh
+
+    * See `R/HI_mesh.R`
+
+```{r, fig.width=5, fig.height=5}
+knitr::include_graphics("images/sdmtmb_mesh.png")
+```
+
+---
+
+2. Fit the model
+
+```{r, eval = F}
+spat_mod <- sdmTMB(shoots ~ elevation,
+                  data = sg_df,
+                  spde = hi_spde,
+                  spatial_only = TRUE)
+```
+
+---
+
+2. Evaluate the model
+
+
+
+???
+Fitting a spatial mixed effects model means needing to model the GMRF over the spatial domain. Most of the time with irregularly spaced observations.
+
+We do this by creating a triangular mesh of the study area where observations 
+
+<!-- -- -->
+
+<!-- * Spatial random effects = random intercepts with imposed correlation structure (think GLS correlation structures) -->
+
+<!-- * Spatial random effects are **latent** variables.  -->
+
+<!-- * Represent unmeasured things affecting your data ("habitat quality") -->
 
 <!-- Imagine we collect fish with seine nets in ten locations -->
 
@@ -475,7 +539,7 @@ where $\varepsilon_i$ are random errors and $u_i$ are the spatial random effects
 <!--        x = rep(rnorm(10), each = 10), -->
 <!--        y = rep(rnorm(10), each = 10)) -->
 
-<!-- catch <-  -->
+<!-- catch <- -->
 <!--   ggplot(df) + -->
 <!--   geom_boxplot(aes(x = site, y = cpue)) + -->
 <!--   labs(y = "CPUE", -->
@@ -483,7 +547,7 @@ where $\varepsilon_i$ are random errors and $u_i$ are the spatial random effects
 <!--   theme(title = element_text(size = 16), -->
 <!--         axis.title = element_text(size = 16)) -->
 
-<!-- map <-  -->
+<!-- map <- -->
 <!--   ggplot(df) + -->
 <!--   geom_point(aes(x = x, y = y)) + -->
 <!--   labs(title = "Site locations") + -->
@@ -498,6 +562,7 @@ where $\varepsilon_i$ are random errors and $u_i$ are the spatial random effects
 <!-- $$c_i \sim \text{Poisson}(\lambda_i)$$ -->
 <!-- $$\pmb{\lambda_i} = \text{exp}(\pmb{X_i}\pmb{\beta} + \pmb{z_ib})$$ -->
 <!-- $$\pmb{b} \sim Normal(0, \sigma_{b}^2)$$ -->
+
 <!-- --- -->
 
 <!-- ### Random intercept model -->

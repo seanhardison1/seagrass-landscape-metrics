@@ -79,7 +79,7 @@ syn_sg_fin <-
   syn_locs %>% 
   sf::st_transform(crs = st_crs("+proj=utm +zone=18 +datum=WGS84 +units=m +no_defs")) %>% 
   left_join(., syn_sg) %>% 
-  mutate(depth = extract(dem, as_Spatial(.)))
+  mutate(depth = extract(dem_resample, as_Spatial(.)))
 
 # intersect VIMS and synoptic data
 sg_bound <- NULL
