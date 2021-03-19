@@ -24,7 +24,8 @@ sg_df <- sg_bound %>%
                 year, SiteName) %>% 
   st_set_geometry(NULL) %>% 
   filter(meadow == "HI") %>% 
-  mutate(shoots_norm = center.and.rescale(shoots))
+  mutate(shoots_norm = center.and.rescale(shoots),
+         year = as.numeric(as.character(year)))
 
 # Read HI data------------------------
 hi <- st_read(here::here("data/HI_INLA_poly.kml")) %>% 
@@ -76,71 +77,81 @@ plot(hi_spde)
 #                    spde = hi_spde,
 #                    spatial_only = TRUE)
 
-spat_mod2 <- sdmTMB(shoots ~ elevation,
-                    data = sg_df,
-                    spde = hi_spde,
-                    spatial_only = T)
-
-spat_mod3 <- sdmTMB(shoots ~ s(elevation),
-                    data = sg_df,
-                    spde = hi_spde,
-                    spatial_only = T)
-
 spat_mod4 <- sdmTMB(shoots ~ s(elevation),
                     data = sg_df,
                     spde = hi_spde,
                     spatial_only = T,
                     family = tweedie())
 
-AIC(spat_mod2, spat_mod3, spat_mod4)
+spat_mod5 <- sdmTMB(shoots ~ s(elevation),
+                    data = sg_df,
+                    spde = hi_spde,
+                    spatial_only = F,
+                    extra_time = 2016L,
+                    spatial_trend = T,
+                    time = "year",
+                    family = tweedie())
+
+spat_mod6 <- sdmTMB(shoots ~ s(elevation),
+                    data = sg_df,
+                    spde = hi_spde,
+                    spatial_only = F,
+                    spatial_trend = T,
+                    extra_time = 2016L,
+                    time = "year",
+                    ar1_fields = TRUE,
+                    family = tweedie())
+
+AIC(spat_mod4, spat_mod5, spat_mod6)
 
 # Each basis function gets an entry in the summary
-summary(spat_mod4)
+summary(spat_mod5)
 
 # Evaluate the model-----------------
-sg_df$res <- residuals(spat_mod4)
-qqnorm(sg_df$res);abline(a = 0, b = 1)
-hist(sg_df$res)
+# sg_df$res <- residuals(spat_mod6)
+qqnorm(residuals(spat_mod5));abline(a = 0, b = 1)
+# hist(sg_df$res)
 
-ggplot(sg_df) +
-  geom_point(aes(x = longitude, y= latitude, 
-                 size = res, color = res)) +
-  labs(size = "Standardized\n residuals",
-       color = "Standardized\n residuals") +
-  scale_color_continuous(limits=c(-3, 3), breaks=seq(-3, 3, by=1)) +
-  scale_size_continuous(limits=c(-3, 3), breaks=seq(-3, 3, by=1)) +
-  guides(color= guide_legend(), size=guide_legend()) +
-  theme_bw() +
-  theme(axis.title = element_text(size = 16)) 
 
 # Predict from the model-------------------
-pred_df <- predict(spat_mod4, newdata = dem_hi)
+ndata <- bind_rows(dem_hi %>% mutate(year = 2015),
+                   dem_hi %>% mutate(year = 2016),
+                   dem_hi %>% mutate(year = 2017),
+                   dem_hi %>% mutate(year = 2018))
+pred_df <- predict(spat_mod5, newdata = ndata)
 
 (twed_spat_pred <- 
-  ggplot(pred_df) +
-  geom_tile(aes(x = longitude, y = latitude, fill = exp(est))) +
-  geom_point(data = sg_df, aes(x = longitude, 
-                               y = latitude, 
-                               size = shoots)) +
-  labs(fill = "Predicted seagrass\n density",
-       size = "Observed density") +
-  scale_fill_viridis_c() +
-  theme_bw())
+    ggplot(pred_df) +
+    geom_tile(aes(x = longitude, y = latitude, fill = exp(est))) +
+    # geom_point(data = sg_df, aes(x = longitude,
+    #                              y = latitude,
+    #                              size = shoots)) +
+    labs(fill = "Predicted seagrass\n density",
+         size = "Observed density") +
+    scale_fill_viridis_c() +
+    facet_wrap(~year) +
+    theme_bw())
 
 
-sg_df_pred <- predict(spat_mod4)
+sg_df_pred <- predict(spat_mod6)
 (twed_pred <- 
-  ggplot(sg_df_pred) +
-  geom_point(aes(x = elevation, y= shoots)) +
-  geom_line(aes(x = elevation, y = exp(est))) +
-  theme_bw() +
-  labs(y = "Shoot m<sup>-2</sup>",
-       x = "Elevation (m, NAVD88)") +
-  theme(axis.title.y = element_markdown(),
-        axis.title.x = element_markdown()))
+    ggplot(sg_df_pred) +
+    geom_point(aes(x = elevation, y= shoots)) +
+    geom_line(aes(x = elevation, y = exp(est))) +
+    theme_bw() +
+    labs(y = "Shoot m<sup>-2</sup>",
+         x = "Elevation (m, NAVD88)") +
+    theme(axis.title.y = element_markdown(),
+          axis.title.x = element_markdown()) +
+    facet_wrap(~year))
 
 twed_pred + 
   twed_spat_pred 
 
-elevs
-hist(dem_hi$elevation)
+sg_df %>% 
+  group_by(year) %>% 
+  dplyr::summarise(tot_sg = sum(shoots))
+
+sg_df_pred %>% 
+  group_by(year) %>% 
+  dplyr::summarise(tot_sg = sum(exp(est)))
