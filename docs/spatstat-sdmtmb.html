@@ -34,11 +34,19 @@ class: center, middle, inverse, title-slide
 
 ### What does it mean to be "drawn from a Normal distribution"?
 
-We sample oyster densities from 30 0.5m&lt;sup&gt;2&lt;/sup&gt; quadrats along a reef.
+We sample oyster densities from 0.5m&lt;sup&gt;2&lt;/sup&gt; quadrats along a transect from extending from the water's edge.
+
+&lt;img src="images/oyst_transect1.png" width="75%" style="display: block; margin: auto;" /&gt;
+
+---
+
+### What does it mean to be "drawn from a Normal distribution"?
+
+We sample oyster densities from 0.5m&lt;sup&gt;2&lt;/sup&gt; quadrats along a transect from extending from the water's edge.
 
 Observed densities are
 
-&lt;img src="spatstat-sdmtmb_files/figure-html/unnamed-chunk-3-1.png" style="display: block; margin: auto;" /&gt;
+&lt;img src="spatstat-sdmtmb_files/figure-html/unnamed-chunk-4-1.png" style="display: block; margin: auto;" /&gt;
 
 ---
 
@@ -51,7 +59,7 @@ All we need are estimates of a **mean** `\(\mu\)` and a **variance** `\(\sigma^2
 
 --
 
-&lt;img src="spatstat-sdmtmb_files/figure-html/unnamed-chunk-4-1.png" style="display: block; margin: auto;" /&gt;
+&lt;img src="spatstat-sdmtmb_files/figure-html/unnamed-chunk-5-1.png" style="display: block; margin: auto;" /&gt;
 
 "drawn from" = "comes from" = `\(\sim\)`
 
@@ -64,31 +72,38 @@ We would expect future random samples of oysters from this age population to be 
 The relationship between **two** normally distributed variables is described by the **multivariate normal** distribution. 
 
 
-&lt;img src="spatstat-sdmtmb_files/figure-html/unnamed-chunk-5-1.png" style="display: block; margin: auto;" /&gt;
+&lt;img src="spatstat-sdmtmb_files/figure-html/unnamed-chunk-6-1.png" style="display: block; margin: auto;" /&gt;
 
 &lt;img src="images/mvnorm.png" width="60%" style="display: block; margin: auto;" /&gt;
 
 ---
 ### Extending the Gaussian to multiple dimensions
 
-The relationship between **two** normally distributed variables is described by the **multivariate normal** distribution. 
+The relationship between **two** normally distributed variables can be described by a **multivariate normal** distribution. 
 
-&lt;img src="spatstat-sdmtmb_files/figure-html/unnamed-chunk-7-1.png" style="display: block; margin: auto;" /&gt;
+&lt;img src="spatstat-sdmtmb_files/figure-html/unnamed-chunk-8-1.png" style="display: block; margin: auto;" /&gt;
 
 &lt;img src="images/mvnorm2.png" width="60%" style="display: block; margin: auto;" /&gt;
 
 ---
 ### Oyster densities in space
 
-After our first sample, we move to a different barrier island and repeat the sampling. We then return to the original site and sample a reef 10 m away from the first site. 
+After our first sample, we move 10 m down the shore and repeat the sampling. We next boat to a different barrier island 10 km away and repeat the sampling a third time: 
 
 **How would you expect our original sample to covary with the new data?**
 
---
+&lt;img src="images/oyst_transect2.png" width="95%" style="display: block; margin: auto;" /&gt;
 
-&lt;img src="spatstat-sdmtmb_files/figure-html/unnamed-chunk-9-1.png" style="display: block; margin: auto;" /&gt;
+---
+### Oyster densities in space
 
-Oyster densities at nearby sites covary according to some unmeasured process (predation? exposure?)
+After our first sample, we move 10 m down the shore and repeat the sampling. We next boat to a different barrier island 10 km away and repeat the sampling a third time: 
+
+**How would you expect our original sample to covary with the new data?**
+
+&lt;img src="spatstat-sdmtmb_files/figure-html/unnamed-chunk-11-1.png" style="display: block; margin: auto;" /&gt;
+
+Paired oyster densities at nearby sites covary according to some unmeasured process (predation? exposure?, elevation?)
 
 ---
 
@@ -127,7 +142,7 @@ Oyster densities at nearby sites covary according to some unmeasured process (pr
 Here's a regression model to consider
 
 `$$\text{seagrass density}_i = \beta_0 + \text{elevation}_i\beta_1 + \varepsilon_i,$$`
-&lt;img src="spatstat-sdmtmb_files/figure-html/unnamed-chunk-10-1.png" width="80%" style="display: block; margin: auto;" /&gt;
+&lt;img src="spatstat-sdmtmb_files/figure-html/unnamed-chunk-12-1.png" width="80%" style="display: block; margin: auto;" /&gt;
 ---
 
 ### Generalized least squares
@@ -136,7 +151,7 @@ Question: is there spatial autocorrelation in model residuals?
 
 Option 1: Make a visual assessment of residual spatial autocorrelation
 
-&lt;img src="spatstat-sdmtmb_files/figure-html/unnamed-chunk-11-1.png" style="display: block; margin: auto;" /&gt;
+&lt;img src="spatstat-sdmtmb_files/figure-html/unnamed-chunk-13-1.png" style="display: block; margin: auto;" /&gt;
 
 ---
 ### Generalized least squares
@@ -145,7 +160,7 @@ Question: is there spatial autocorrelation in model residuals?
 
 Option 2: Assess residual autocorrelation with **sample variogram**
 
-&lt;img src="spatstat-sdmtmb_files/figure-html/unnamed-chunk-12-1.png" style="display: block; margin: auto;" /&gt;
+&lt;img src="spatstat-sdmtmb_files/figure-html/unnamed-chunk-14-1.png" style="display: block; margin: auto;" /&gt;
 
 --
 
@@ -213,17 +228,17 @@ The statement `\(\varepsilon \sim N(0, \sigma^2)\)` can be reinterpreted in term
 where `\(\pmb{I}\)` is a *n x n* identity matrix and `\(\pmb{\Sigma} = \sigma^2\pmb{I}\)`
 
 
-In the model, we estimated the residual variance term to be 110.302, so the residual covariance matrix is `\(\sigma^2 I\)` or
+In the model, we estimated the residual variance term to be 163.9, so the residual covariance matrix is `\(\sigma^2 I\)` or
 
 
 ```
 ##          [,1]     [,2]     [,3]     [,4]     [,5]     [,6]
-## [1,] 163.7144   0.0000   0.0000   0.0000   0.0000   0.0000
-## [2,]   0.0000 163.7144   0.0000   0.0000   0.0000   0.0000
-## [3,]   0.0000   0.0000 163.7144   0.0000   0.0000   0.0000
-## [4,]   0.0000   0.0000   0.0000 163.7144   0.0000   0.0000
-## [5,]   0.0000   0.0000   0.0000   0.0000 163.7144   0.0000
-## [6,]   0.0000   0.0000   0.0000   0.0000   0.0000 163.7144
+## [1,] 163.9129   0.0000   0.0000   0.0000   0.0000   0.0000
+## [2,]   0.0000 163.9129   0.0000   0.0000   0.0000   0.0000
+## [3,]   0.0000   0.0000 163.9129   0.0000   0.0000   0.0000
+## [4,]   0.0000   0.0000   0.0000 163.9129   0.0000   0.0000
+## [5,]   0.0000   0.0000   0.0000   0.0000 163.9129   0.0000
+## [6,]   0.0000   0.0000   0.0000   0.0000   0.0000 163.9129
 ```
 
 (First 6 rows and columns)
@@ -271,7 +286,7 @@ mod2 &lt;- gls(shoots ~ elevation, data = sg_df, method = "REML",
 sg_df$res &lt;- resid(mod2, type = "n")
 ```
 
-&lt;img src="spatstat-sdmtmb_files/figure-html/unnamed-chunk-18-1.png" style="display: block; margin: auto;" /&gt;
+&lt;img src="spatstat-sdmtmb_files/figure-html/unnamed-chunk-20-1.png" style="display: block; margin: auto;" /&gt;
 
 
 ---
@@ -322,24 +337,62 @@ where `\(\varepsilon_i\)` are random errors and `\(u(s_i)\)` are the spatial ran
 
 ### Fitting the model with sdmTMB
 
-1. Define a mesh
-
-    * See `R/HI_mesh.R`
-
-&lt;img src="images/sdmtmb_mesh.png" width="780" style="display: block; margin: auto;" /&gt;
-
----
-
-2. Fit the model
+Here's what the code for this model looks like:
 
 
+```r
+spat_mod &lt;- sdmTMB(shoots ~ elevation,
+                   data = sg_df,
+                   spde = hi_spde,
+                   spatial_only = TRUE)
+```
+
+* We fitted a simplified data to illustrate GLS, but the real data contains zeros and appear to have a non-linear relationship with elevations
+
+Moving to `R/HI_mesh_ST.R`
+
+
+&lt;!-- 1. Define a mesh --&gt;
+
+&lt;!-- ```{r, echo = F} --&gt;
+&lt;!-- # Generate the mesh in INLA --&gt;
+&lt;!-- hi_mesh &lt;- inla.mesh.2d(coords,  --&gt;
+&lt;!--                         boundary=hi_spat, max.edge = 150) --&gt;
+
+&lt;!-- # Wse sdmTMB to convert INLA mesh into friendly format --&gt;
+&lt;!-- hi_spde &lt;- make_mesh(sg_df, c("longitude","latitude"), --&gt;
+&lt;!--                      mesh = hi_mesh) --&gt;
+
+&lt;!-- ``` --&gt;
+
+&lt;!-- ```{r, fig.width=5, fig.height=5} --&gt;
+&lt;!-- knitr::include_graphics("images/sdmtmb_mesh.png") --&gt;
+&lt;!-- ``` --&gt;
+
+&lt;!-- --- --&gt;
+
+&lt;!-- 2. Fit the model --&gt;
+
+&lt;!-- ```{r, eval = F, echo = T} --&gt;
+&lt;!-- spat_mod &lt;- sdmTMB(shoots ~ elevation, --&gt;
+&lt;!--                   data = sg_df, --&gt;
+&lt;!--                   spde = hi_spde, --&gt;
+&lt;!--                   spatial_only = TRUE) --&gt;
+&lt;!-- ``` --&gt;
+
+
+&lt;!-- * This model doesn't converge,  --&gt;
+
+&lt;!-- --- --&gt;
+
+&lt;!-- 2. Evaluate the model --&gt;
 
 
 
-???
-Fitting a spatial mixed effects model means needing to model the GMRF over the spatial domain. Most of the time with irregularly spaced observations.
+&lt;!-- ??? --&gt;
+&lt;!-- Fitting a spatial mixed effects model means needing to model the GMRF over the spatial domain. Most of the time with irregularly spaced observations. --&gt;
 
-We do this by creating a triangular mesh of the study area where observations 
+&lt;!-- We do this by creating a triangular mesh of the study area where observations  --&gt;
 
 &lt;!-- -- --&gt;
 

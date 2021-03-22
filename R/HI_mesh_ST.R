@@ -9,22 +9,15 @@ library(ggtext)
 # Get seagrass data from presentation-------------------------
 load(here::here("data/bound_sg.rdata"))
 
-# Center and rescale function
-center.and.rescale <- function(x) {
-  x <- x - mean(x, na.rm = T)
-  x <- x / (1 * sd(x))
-  return(x)
-}
-
 sg_df <- sg_bound %>% 
-  mutate(meadow = ifelse(str_detect(SiteName, "HI"), "HI", "SB")) %>% 
+  mutate(meadow = ifelse(str_detect(SiteName, "HI"),
+                         "HI", "SB")) %>% 
   dplyr::select(shoots = shoots_raw, 
                 elevation = depth, meadow,
                 longitude, latitude,
                 year, SiteName) %>% 
   st_set_geometry(NULL) %>% 
-  filter(meadow == "HI") %>% 
-  mutate(shoots_norm = center.and.rescale(shoots))
+  filter(meadow == "HI", year == 2017) 
 
 # Read HI data------------------------
 hi <- st_read(here::here("data/HI_INLA_poly.kml")) %>% 
@@ -50,7 +43,7 @@ elevs <-
   ggplot(dem_hi) +
   geom_tile(aes(x = longitude, y = latitude, fill = elevation)) +
   scale_fill_viridis_c()
-# elevs
+elevs
 # Convert the HI polygon into an INLA mesh------------------------
 hi_spat <- hi %>% as("Spatial") %>% inla.sp2segment()
 
@@ -61,22 +54,23 @@ coords <-
   as.matrix.data.frame()
 
 # Generate the mesh in INLA
-hi_mesh <- inla.mesh.2d(coords,
+hi_mesh <- inla.mesh.2d(coords, 
                         boundary=hi_spat, max.edge = 150)
-
+plot(hi_mesh)
 # Last prep step: use sdmTMB to convert INLA mesh into friendly format
-hi_spde <- make_mesh(sg_df, c("longitude","latitude"), mesh = hi_mesh)
+hi_spde <- make_mesh(sg_df, c("longitude","latitude"),
+                     mesh = hi_mesh)
 plot(hi_spde)
 
 # Fit the model----------------------- PROBLEM - model won't converge
 
 # Solution: Bring back the zeros, use a tweedie distribution
-# spat_mod <- sdmTMB(shoots ~ elevation,
-#                    data = sg_df,
-#                    spde = hi_spde,
-#                    spatial_only = TRUE)
+spat_mod <- sdmTMB(shoots ~ elevation,
+                   data = sg_df,
+                   spde = hi_spde,
+                   spatial_only = TRUE)
 
-spat_mod2 <- sdmTMB(shoots ~ elevation,
+spat_mod2 <- sdmTMB(shoots ~ s(elevation),
                     data = sg_df,
                     spde = hi_spde,
                     spatial_only = T)
@@ -84,21 +78,16 @@ spat_mod2 <- sdmTMB(shoots ~ elevation,
 spat_mod3 <- sdmTMB(shoots ~ s(elevation),
                     data = sg_df,
                     spde = hi_spde,
-                    spatial_only = T)
-
-spat_mod4 <- sdmTMB(shoots ~ s(elevation),
-                    data = sg_df,
-                    spde = hi_spde,
                     spatial_only = T,
                     family = tweedie())
 
-AIC(spat_mod2, spat_mod3, spat_mod4)
+AIC(spat_mod, spat_mod2, spat_mod3)
 
 # Each basis function gets an entry in the summary
-summary(spat_mod4)
+summary(spat_mod3)
 
 # Evaluate the model-----------------
-sg_df$res <- residuals(spat_mod4)
+sg_df$res <- residuals(spat_mod3)
 qqnorm(sg_df$res);abline(a = 0, b = 1)
 hist(sg_df$res)
 
@@ -114,7 +103,8 @@ ggplot(sg_df) +
   theme(axis.title = element_text(size = 16)) 
 
 # Predict from the model-------------------
-pred_df <- predict(spat_mod4, newdata = dem_hi)
+pred_df <- predict(spat_mod3, 
+                   newdata = dem_hi)
 
 (twed_spat_pred <- 
   ggplot(pred_df) +
@@ -128,7 +118,7 @@ pred_df <- predict(spat_mod4, newdata = dem_hi)
   theme_bw())
 
 
-sg_df_pred <- predict(spat_mod4)
+sg_df_pred <- predict(spat_mod3)
 (twed_pred <- 
   ggplot(sg_df_pred) +
   geom_point(aes(x = elevation, y= shoots)) +
@@ -142,5 +132,5 @@ sg_df_pred <- predict(spat_mod4)
 twed_pred + 
   twed_spat_pred 
 
-elevs
+ elevs
 hist(dem_hi$elevation)
