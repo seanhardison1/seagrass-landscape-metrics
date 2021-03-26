@@ -1,7 +1,10 @@
 library(tidyverse)
 library(sf)
 library(raster)
-library(mgcv)
+library(magrittr)
+
+# biomass and canopy data
+load(here::here("data/sg_bmass_canhei.rdata"))
 
 # Center and rescale function
 center.and.rescale <- function(x) {
@@ -11,7 +14,8 @@ center.and.rescale <- function(x) {
 }
 
 # read in synoptic seagrass sampling data and point locations
-syn_locs <- st_read(here::here("data/Syn_Site_Points_2018")) 
+syn_locs <- st_read(here::here("data/Syn_Site_Points_2018")) %>% 
+  mutate(SiteName = str_replace(SiteName, "-", " "))
 syn_sg <- read.csv(here::here("data/seagrass_dens_2007-2017.csv")) %>% 
   mutate(SiteName = ifelse(str_detect(PLOT, "T"),
                            str_replace_all(PLOT, " |\\.", "-"),
@@ -54,8 +58,7 @@ dem_df <- dem_resample %>%
   as_tibble() %>% 
   dplyr::rename(depth = 1,
                 longitude = 2,
-                latitude = 3) %>% 
-  mutate(year = 2018)
+                latitude = 3) 
 
 # read in SAV shapefiles
 file_vec <- paste0("sav",2011:2018)
@@ -79,37 +82,54 @@ syn_sg_fin <-
   syn_locs %>% 
   sf::st_transform(crs = st_crs("+proj=utm +zone=18 +datum=WGS84 +units=m +no_defs")) %>% 
   left_join(., syn_sg) %>% 
-  mutate(depth = extract(dem_resample, as_Spatial(.)))
+  dplyr::rename(sampyr = SAMPYR) %>% 
+  left_join(.,sg_bmass_canhei) %>% 
+  mutate(elevation = extract(dem_resample, as_Spatial(.)))
+
+plot(vims_sg_proc %>% filter(year == 2018))
+
+#Good: 2011, 2015, 2017, 2018
+#Bad: 2012, 2014, 2016
+
+#Good SB: 2013
+# Bad HI: 2013
+
+# Bad SB: 
 
 # intersect VIMS and synoptic data
 sg_bound <- NULL
-for (i in c(2015, 2017, 2018)){
+for (i in c(2011:2018)){
   int_df <- syn_sg_fin %>% 
-    dplyr::filter(SAMPYR == i) %>% 
+    dplyr::filter(sampyr == i) %>% 
     st_join(.,vims_sg_proc %>% dplyr::filter(year == i))
+  
+  if (i %in% c(2012, 2014, 2016)){
+    int_df %<>% mutate(vims_dens = NA)
+  } else if (i == 2013){
+    int_df %<>% mutate(vims_dens = ifelse(str_detect(SiteName, "HI"),
+                                         NA, 
+                                         vims_dens))
+  }
 
   assign('sg_bound', bind_rows(int_df, sg_bound))
 }
 
 # process output
 sg_bound %<>% 
-  dplyr::select(-year) %>% 
+  dplyr::select(-year, -density) %>% 
   dplyr::rename(density = DENSITY,
                 shoots = SHOOTS,
-                year = SAMPYR,
+                year = sampyr,
                 longitude = Easting__X,
                 latitude = Northing__) %>% 
-  mutate(shoots_raw = shoots) %>% 
-  mutate_at(vars(depth, density, shoots),
-            center.and.rescale) %>% 
   mutate(year = as.factor(year),
-         sg_pres = factor(ifelse(vims_dens > 0 | shoots_raw > 0, 1, 0)))
+         sg_pres = factor(ifelse(vims_dens > 0 | shoots > 0, 1, 0)))
 
 save(sg_bound, file = here::here("data/bound_sg.rdata"))
 
 ggplot(sg_bound) +
-  geom_point(aes(x = shoots, y = depth)) +
-  geom_smooth(aes(x = shoots, y = depth),
+  geom_point(aes(x = shoots, y = elevation)) +
+  geom_smooth(aes(x = shoots, y = elevation),
               method = "lm") +
   facet_wrap(.~year)
 
