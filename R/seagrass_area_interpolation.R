@@ -4,6 +4,7 @@ library(tsibble)
 library(forecast)
 library(fable)
 load(here::here("data/seagrass_cover.rdata"))
+load(here::here("data/seagrass_area.rdata"))
 
 seagrass_coverage_interp <- 
   seagrass_coverage %>%

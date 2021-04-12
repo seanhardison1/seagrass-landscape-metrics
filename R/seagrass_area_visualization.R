@@ -18,7 +18,7 @@ sb_ts <- sb_sg %>%
   st_set_geometry(NULL) %>% 
   tidyr::complete(YEAR = full_seq(2001:2018, 1)) %>% 
   dplyr::rename(year = YEAR) %>% 
-  mutate(bay = "South Bay")
+  mutate(meadow = "SB")
 
 # Time series of total seagrass area for Hog Island Bay
 
@@ -29,15 +29,24 @@ hi_ts <- hi_sg %>%
   st_set_geometry(NULL) %>% 
   tidyr::complete(YEAR = full_seq(2007:2018, 1)) %>% 
   dplyr::rename(year = YEAR) %>% 
-  mutate(bay = "Hog Island Bay")
+  mutate(meadow = "HI")
 
-sg_ts <- bind_rows(hi_ts, sb_ts) 
+sg_ts <- bind_rows(hi_ts, sb_ts) %>%
+  tsibble(index = year, key = meadow) %>% 
+  mutate(across(contains('sg_area'), 
+                .fns = list(interp = ~na.interp(., linear = T))),
+         interp = ifelse(is.na(sg_area), TRUE, FALSE))
 
 save(sg_ts, file = here::here("data/seagrass_area.rdata"))
 
 ggplot(sg_ts) +
-  geom_point(aes(x = year, y = sg_area, color = bay)) +
-  geom_line(aes(x = year, y = sg_area, color = bay))
+  geom_point(aes(x = year, y = sg_area_interp, group= meadow), color = "purple") +
+  geom_line(aes(x = year, y = sg_area, 
+                group= meadow), color = "purple") +
+  geom_point(aes(x = year, y = sg_area, 
+                 color= meadow)) +
+  geom_line(aes(x = year, y = sg_area, 
+                color= meadow))
 
 
 
