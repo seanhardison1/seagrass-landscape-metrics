@@ -50,7 +50,11 @@ vcr_poly <- dem_poly %>% as("sf")
 
 # crop and mask dem according to VCR polygon
 dem <- mask( crop( dem_raw,y = extent(dem_poly) ), dem_poly)
-dem_resample <- aggregate(dem, fact = 5, fun = mean)
+r <- raster(extent(dem),
+            res = 30,
+            crs = crs(dem))
+# dem_resample <- aggregate(dem, fact = 10, fun = mean)
+dem_resample <- resample(dem, r)
 dem_resample[dem_resample > 0 ] <- NA
 
 dem_df <- dem_resample %>% 
@@ -61,7 +65,7 @@ dem_df <- dem_resample %>%
                 latitude = 3) 
 
 # read in SAV shapefiles
-file_vec <- paste0("sav",2011:2018)
+file_vec <- paste0("sav",2010:2018)
 vims_sg <- NULL
 for (i in file_vec){
   assign("vims_sg", 
@@ -72,8 +76,8 @@ for (i in file_vec){
 
 # intersect SAV polygons with VCR polygon
 vims_sg_proc <- vims_sg %>%
-  sf::st_transform(crs = st_crs("+proj=utm +zone=18 +datum=WGS84 +units=m +no_defs")) %>% 
-  # filter(DENSITY != 0) %>% 
+  sf::st_transform(crs = st_crs("+proj=utm +zone=18 +datum=WGS84 +units=m +no_defs")) %>%
+  # filter(DENSITY != 0) %>%
   st_intersection(vcr_poly) %>% 
   dplyr::select(year, vims_dens = DENSITY) 
 
@@ -86,8 +90,12 @@ syn_sg_fin <-
   left_join(.,sg_bmass_canhei) %>% 
   mutate(elevation = extract(dem_resample, as_Spatial(.)))
 
-plot(vims_sg_proc %>% filter(year == 2018))
-
+plot(vims_sg_proc %>% filter(year == 2010))
+ggplot() +
+  geom_sf(data = vims_sg_proc %>% filter(year == 2010)) +
+  # geom_sf(data = syn_sg_fin %>% filter(sampyr == 2010), size = 0.5) +
+  # geom_sf(data = int_vims) +
+  geom_sf(data = int_df, aes(color = edge_dist), size = 0.5)
 #Good: 2011, 2015, 2017, 2018
 #Bad: 2012, 2014, 2016
 
@@ -96,12 +104,42 @@ plot(vims_sg_proc %>% filter(year == 2018))
 
 # Bad SB: 
 
+ls_sg <- vims_sg_proc %>% 
+  group_by(year) %>% 
+  summarise(do.un)
+
 # intersect VIMS and synoptic data
 sg_bound <- NULL
-for (i in c(2011:2018)){
-  int_df <- syn_sg_fin %>% 
-    dplyr::filter(sampyr == i) %>% 
-    st_join(.,vims_sg_proc %>% dplyr::filter(year == i))
+for (i in c(2010,2011, 2013:2018)){
+  
+  int_vims <- vims_sg_proc %>% 
+      dplyr::filter(year == i, vims_dens > 0) 
+    
+  if (nrow(int_vims) != 0){
+      int_vims %<>% 
+        summarise() %>% 
+        st_cast("MULTIPOINT") 
+
+    
+      int_df <- syn_sg_fin %>% 
+        dplyr::filter(sampyr == i) %>% 
+        mutate(edge_dist = as.numeric(st_distance(.,int_vims))) %>% 
+        st_join(.,vims_sg_proc %>% dplyr::filter(year == i)) %>% 
+        mutate(edge_dist = ifelse(vims_dens == 0, edge_dist, edge_dist * -1))
+  
+      # plot(int_vims)
+
+  } else {
+    
+    int_df <- syn_sg_fin %>% 
+      dplyr::filter(sampyr == i) %>% 
+      mutate(edge_dist = NA) %>% 
+      st_join(.,vims_sg_proc %>% dplyr::filter(year == i)) 
+  }
+
+  # 
+  # plot(int_df %>% dplyr::select(edge_dist))
+  # plot(int_vims, add = T)
   
   if (i %in% c(2012, 2014, 2016)){
     int_df %<>% mutate(vims_dens = NA)
@@ -116,6 +154,7 @@ for (i in c(2011:2018)){
 
 # process output
 sg_bound %<>% 
+  mutate(edge_dist = ifelse(abs(edge_dist) > 2500, NA, edge_dist)) %>% 
   dplyr::select(-year, -density) %>% 
   dplyr::rename(density = DENSITY,
                 shoots = SHOOTS,
@@ -123,7 +162,9 @@ sg_bound %<>%
                 longitude = Easting__X,
                 latitude = Northing__) %>% 
   mutate(year = as.factor(year),
-         sg_pres = factor(ifelse(vims_dens > 0 | shoots > 0, 1, 0)))
+         sg_pres = factor(ifelse(vims_dens > 0 | shoots > 0, 1, 0)),
+         vims_pres = factor(ifelse(vims_dens > 0, 1, 0)),
+         uva_pres = factor(ifelse(shoots> 0, 1, 0)))
 
 save(sg_bound, file = here::here("data/bound_sg.rdata"))
 

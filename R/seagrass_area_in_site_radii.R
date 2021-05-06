@@ -16,7 +16,7 @@ sg <- bind_rows(hi_sg, sb_sg)
 
 sg_coverage <- NULL
 for (d in c(500, 1000,2000,3000)){
-  
+# for (d in c(1000)){
   message(d)
   Sys.sleep(0.25)
   buffed_locs <- 

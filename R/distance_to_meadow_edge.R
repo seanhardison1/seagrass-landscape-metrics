@@ -35,8 +35,8 @@ for (i in 2012:2018){
      inside <- sg %>%
         filter(YEAR == i) %>%
         st_union() %>%
-        st_as_sf() %>%
-        st_intersection(.,site_dist) %>% 
+        st_as_sf() %>% 
+        st_intersection(.,site_dist) %>%
         nrow()
      
      sg_multipoint <- sg %>% 

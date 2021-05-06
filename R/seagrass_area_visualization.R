@@ -14,7 +14,7 @@ load(here::here("data/HogIslandBaySeagrass.rdata"))
 sb_ts <- sb_sg %>% 
   dplyr::group_by(YEAR) %>% 
   summarise(do_union = F) %>% 
-  mutate(sg_area = as.numeric(st_area(.))) %>% 
+  mutate(sg_area =  as.numeric(units::set_units(st_area(.), "km^2"))) %>% 
   st_set_geometry(NULL) %>% 
   tidyr::complete(YEAR = full_seq(2001:2018, 1)) %>% 
   dplyr::rename(year = YEAR) %>% 
@@ -25,7 +25,7 @@ sb_ts <- sb_sg %>%
 hi_ts <- hi_sg %>% 
   dplyr::group_by(YEAR) %>% 
   summarise(do_union = F) %>% 
-  mutate(sg_area = as.numeric(st_area(.))) %>% 
+  mutate(sg_area = as.numeric(units::set_units(st_area(.), "km^2"))) %>% 
   st_set_geometry(NULL) %>% 
   tidyr::complete(YEAR = full_seq(2007:2018, 1)) %>% 
   dplyr::rename(year = YEAR) %>% 
