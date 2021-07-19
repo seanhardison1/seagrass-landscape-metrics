@@ -1,0 +1,25 @@
+---
+output:
+ bookdown::word_document2:
+   reference_docx: "vcr-fish-template.docx"
+title: "Improving estimates of eelgrass meadow density and carbon sequestration with soap film smoothers"
+author:
+  - Sean Hardison, University of Virginia
+  - Max Castorani, University of Virginia
+bibliography: soap_film_bib.bib
+csl: ecology.csl
+---
+
+## Abstract {-}
+
+## Introduction {-}
+
+The carbon sequestration potential of seagrass meadows per unit area rivals that of terrestrial forests, and in the absence of habitat degradation, meadows are known to retain sequestered carbon for millenia [@lo2008; @fourqurean2012]. These carbon storage attributes and the capacity of meadows to be restored through management actions that align with broader ecosystem management objectives (e.g., shoreline protection, conserving fish habitat) have resulted in seagrasses being considered as a prime candidate for Blue Carbon climate remediation strategies [@duarte2013; @lovelock2019]. These strategies include Payments for Ecosystem Services (PES) approaches, which result in buyers (oftentimes representing polluting corporations) paying stewards to conserve or restore ecosystems that sequester carbon [@shilland2021]. However, despite the extensive literature documenting seagrasses as significant carbon sinks, their inclusion in PES strategies is still nascent due to technical and policy-based challenges [@shilland2021]. 
+
+These challenges include, but are not limited to, the necessity to implement spatially comprehensive, longitudinal *in situ* sampling of carbon stocks [@shilland2021]. Further, field-based methods only provide one component necessary to estimate carbon stocks and flows in a seagrass meadow, and knowledge of the meadow extent through time should also be understood. Current methods for estimating these dynamics therefore rely upon both remotely sensed imagery and intensive field-based sampling [@e.g., oreska2017; meng2019]. While remotely sensed imagery and techniques for mapping seagrasses are becoming more accessible and easy to use, the logistical challenges involved in field-based sampling may be prohibitive for some conservation and restoration programs. As such, the statistical methods used to derive suitable estimates of carbon stocks and flows for including seagrasses in PES strategies should be efficient and effective under sample size limitations. 
+
+## Methods {-}
+
+## Results {-}
+
+## Discussion {-}
