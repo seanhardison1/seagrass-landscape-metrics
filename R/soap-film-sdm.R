@@ -14,6 +14,23 @@ library(dsm)
 # Thanks to Gavin Simpson for providing the inspiration
 # and a guide to fitting these models
 
+
+# helper function
+sfc_as_cols <- function(x, geometry, names = c("x","y")) {
+  if (missing(geometry)) {
+    geometry <- sf::st_geometry(x)
+  } else {
+    geometry <- rlang::eval_tidy(enquo(geometry), x)
+  }
+  stopifnot(inherits(x,"sf") && inherits(geometry,"sfc_POINT"))
+  ret <- sf::st_coordinates(geometry)
+  ret <- tibble::as_tibble(ret)
+  stopifnot(length(names) == ncol(ret))
+  x <- x[ , !names(x) %in% names]
+  ret <- setNames(ret,names)
+  dplyr::bind_cols(x,ret)
+}
+
 # load data----
 load(here::here("data/bound_sg.rdata"))
 load(here::here("data/HogIslandBaySeagrass.rdata"))
@@ -59,13 +76,13 @@ syn_full <-
   bind_rows(.,syn_full1 %>% filter(year == 2018)) %>% 
   arrange(desc(year)) %>% 
   # dplyr::select(-year) %>% 
-  dream::sfc_as_cols() %>% 
+  sfc_as_cols() %>% 
   st_set_geometry(NULL) %>% 
   mutate(x = x/1000,
          y = y/1000)
 
 syn_full1 %<>% 
-  dream::sfc_as_cols() %>% 
+  sfc_as_cols() %>% 
   st_set_geometry(NULL)%>% 
   mutate(x = x/1000,
          y = y/1000)
@@ -75,8 +92,6 @@ head(syn_dat)
 syn_dat_tprs <- syn_full1 %>% slice(1:80)
 head(syn_dat_tprs)
 
-tss_test_so  <- syn_full %>% slice(66:80)
-tss_test_tprs  <- syn_full1 %>% slice(66:80)
 # 
 # ggplot() +
 #   geom_sf(data = train_poly) +
@@ -93,10 +108,9 @@ tss_test_tprs  <- syn_full1 %>% slice(66:80)
 
 # Use TPRS to model how shoot density changes spatially
 syn_dat_tprs %<>% mutate(year = factor(year))
-m1 <- gam(shoots ~ s(x, y, by = year), data = syn_dat_tprs, method = "REML",
+m1 <- gam(shoots ~ s(x, y, by = year, bs = "gp"), data = syn_dat_tprs, method = "REML",
           family = tw(link = "log"))
 summary(m1)
-
 train_poly1 %<>% mutate(geometry = geometry/1000)
 
 r <- raster(extent(train_poly1),
@@ -124,7 +138,7 @@ tmp <- pdata %>%
   st_as_sf(coords = c("x","y"), 
            crs = st_crs(train_poly1)) %>% 
   st_intersection(train_poly1) %>% 
-  dream::sfc_as_cols() %>% 
+  sfc_as_cols() %>% 
   st_set_geometry(NULL)
 
 # visualize
@@ -282,15 +296,6 @@ soap + tprs + plot_layout(guides = "collect") & theme(legend.position = 'bottom'
 
 ggsave(filename = here::here("sdm_comparison.png"),
        dpi = 200, width = 7, height = 3)
-
-
-(tprs_test_pred <- predict(m1,newdata=tss_test_tprs, type = "response"))
-(soap_test_pred <- predict(m2,newdata=tss_test_so, type = "response"))
-
-(oos_pred <- 
-  AIC(m1, m2) %>% 
-  mutate(RMSE = c(sqrt(mean((tss_test_tprs$shoots - tprs_test_pred)^2)),
-                  sqrt(mean((tss_test_so$shoots - soap_test_pred)^2)))))
 
 tprs_test_pred2 <- predict(m1,newdata=syn_dat_tprs, type = "response")
 soap_test_pred2 <- predict(m3,newdata=syn_dat, type = "response")
