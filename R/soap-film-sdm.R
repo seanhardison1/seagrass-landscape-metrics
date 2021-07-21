@@ -108,7 +108,7 @@ head(syn_dat_tprs)
 
 # Use TPRS to model how shoot density changes spatially
 syn_dat_tprs %<>% mutate(year = factor(year))
-m1 <- gam(shoots ~ s(x, y, by = year, bs = "gp"), data = syn_dat_tprs, method = "REML",
+m1 <- gam(shoots ~ s(x, y, by = year), data = syn_dat_tprs, method = "REML",
           family = tw(link = "log"))
 summary(m1)
 train_poly1 %<>% mutate(geometry = geometry/1000)
