@@ -11,6 +11,8 @@ library(metR)
 library(mgcv)
 library(magrittr)
 library(dsm)
+library(sp)
+
 # Thanks to Gavin Simpson for providing the inspiration
 # and a guide to fitting these models
 
@@ -36,7 +38,7 @@ load(here::here("data/bound_sg.rdata"))
 load(here::here("data/HogIslandBaySeagrass.rdata"))
 load(here::here("data/processed_dem.rdata"))
 
-hack <- 2500
+hack <- -2500
 
 # process----
 train_poly1 <- hi_sg %>% 
@@ -92,6 +94,15 @@ head(syn_dat)
 syn_dat_tprs <- syn_full1 %>% slice(1:80)
 head(syn_dat_tprs)
 
+# fit variogram
+kg_df <- syn_dat_tprs %>% 
+  filter(year == 2017)
+coordinates(kg_df) = ~x+y
+crs(kg_df) <- "+proj=utm +zone=18 +datum=WGS84 +units=m +no_defs"
+v <- variogram(shoots~1, data = kg_df)
+vfit <- fit.variogram(v, vgm("Gau"))
+plot(v, vfit)
+
 # 
 # ggplot() +
 #   geom_sf(data = train_poly) +
@@ -108,9 +119,12 @@ head(syn_dat_tprs)
 
 # Use TPRS to model how shoot density changes spatially
 syn_dat_tprs %<>% mutate(year = factor(year))
-m1 <- gam(shoots ~ s(x, y, by = year, bs = "gp"), data = syn_dat_tprs, method = "REML",
+m1 <- gam(shoots ~ s(x, y, by = year, bs = "gp", m = c(1, 30000)), data = syn_dat_tprs, method = "REML",
           family = tw(link = "log"))
+m1.2 <- gam(shoots ~ s(x, y, by = year, bs = "gp", m = c(1, 30000)), data = syn_dat_tprs, method = "REML")
 summary(m1)
+AIC(m1, m1.2)
+gratia::appraise(m1)
 train_poly1 %<>% mutate(geometry = geometry/1000)
 
 r <- raster(extent(train_poly1),
@@ -201,8 +215,8 @@ grid <-
   dplyr::rename(x = X, y = Y) %>% 
   mutate(x = x/1000,
          y = y/1000) %>% 
-  add_row(x = c(435.3, 437.7, 435.2, 437.82),
-          y = c(4141.1, 4143.864, 4141.3, 4143.6))
+  add_row(x = c(435.3, 432.7, 435.2, 432.82),
+          y = c(4141.1, 4138.864, 4141.3, 4138.6))
 
 
 ggplot() +
@@ -213,23 +227,30 @@ ggplot() +
 
 
 # fit the model
-m2 <- gam(shoots ~ s(year, bs = "re") + 
-                     s(x, y,
-                     bs = "so",
-                     xt = list(bnd = bound)),
-          data = syn_dat, method = "REML",
-          knots = grid)
+# m2 <- gam(shoots ~ s(year, bs = "re") + 
+#                      s(x, y,
+#                      bs = "so",
+#                      xt = list(bnd = bound)),
+#           data = syn_dat, method = "REML",
+#           knots = grid)
 
 m3 <- gam(shoots ~  s(x, y,
               bs = "so",
-              xt = list(bnd = bound)),
+              xt = list(bnd = bound, nmax = 500)),
           data = syn_dat, method = "REML",
           knots = grid)
 
+save(bound, syn_dat, grid, file = here::here("data/soap_data.rdata"))
+
+m3 <- gam(shoots ~  s(x, y,
+                      bs = "sf",
+                      xt = list(bnd = bound, nmax = 500)),
+          data = syn_dat, method = "REML",
+          knots = grid)
 
 summary(m3)
 AIC(m1, m2, m3)
-gratia::draw(m2)
+gratia::draw(m3)
 gratia::appraise(m3)
 
 lims <- apply(crds, 2, range)
@@ -251,7 +272,7 @@ pdata_grid <- with(m3$var.summary, expand.grid(x = grid.x, y = grid.y,
                                                year = c(2017, 2018)))
 names(pdata_grid) <- c("x","y","year")
 
-pdata2 <- transform(pdata_grid, shoots = predict(m2, newdata = pdata_grid,
+pdata2 <- transform(pdata_grid, shoots = predict(m3, newdata = pdata_grid,
                                                         type = "response"))
 
 (soap <- 
@@ -270,7 +291,8 @@ pdata2 <- transform(pdata_grid, shoots = predict(m2, newdata = pdata_grid,
   theme(axis.title = element_blank(),
         axis.text = element_text(size = 10),
         legend.title = element_textbox()) +
-  labs(fill = "Shoots m<sup>-2</sup>"))
+  labs(fill = "Shoots m<sup>-2</sup>",
+       title = "Soap film smooth"))
 
 (tprs <- 
   ggplot() +
@@ -289,7 +311,7 @@ pdata2 <- transform(pdata_grid, shoots = predict(m2, newdata = pdata_grid,
   theme(axis.title = element_blank(),
         axis.text = element_text(size = 5),
         legend.title = element_textbox()) +
-  labs(subtitle = "TPRS smooth",
+  labs(subtitle = "Kriging smooth",
        fill = "Shoots m<sup>-2</sup>"))
 
 soap + tprs + plot_layout(guides = "collect") & theme(legend.position = 'bottom')
@@ -319,3 +341,32 @@ bind_rows(sf_pred, tprs_pred) %>%
     geom_point(aes(x = shoots, y = value)) +
     facet_wrap(year~var, scales = "free") +
     geom_abline(aes(intercept = 0, slope = 1))
+
+
+kg_df <- syn_dat_tprs %>% 
+  filter(year == 2017)
+coordinates(kg_df) = ~x+y
+gridded(pdf1) = ~x+y
+crs(pdf1) <- "+proj=utm +zone=18 +datum=WGS84 +units=m +no_defs"
+crs(kg_df) <- "+proj=utm +zone=18 +datum=WGS84 +units=m +no_defs"
+v <- variogram(shoots~1, data = kg_df)
+vfit <- fit.variogram(v, vgm("Sph"))
+plot(v, vfit)
+# ordinary kriging:
+x <- krige(shoots~1, kg_df, pdf1, model = vfit, beta = 235.56)
+spplot(x["var1.pred"], main = "ordinary kriging predictions")
+
+m1 <- gam(shoots ~ s(x, y, k = 40, bs = "gp", 
+                     m = c(1, 31623.84)), data = syn_dat_tprs %>% 
+            filter(year == 2017), method = "REML")
+pred_df <- x["var1.pred"] %>% 
+  as.data.frame() %>% 
+  mutate(gam_pred = predict(m1, newdata= .)) %>% 
+  gather(var, pred, -x, -y)
+
+ggplot(pred_df) +
+  geom_raster(aes(x = x, y = y, 
+                  fill = pred)) +
+  facet_wrap(~var)
+  
+
