@@ -10,12 +10,11 @@ library(fasterize)
 library(metR)
 library(mgcv)
 library(magrittr)
-library(dsm)
+library(gstat)
 library(sp)
 
 # Thanks to Gavin Simpson for providing the inspiration
 # and a guide to fitting these models
-
 
 # helper function
 sfc_as_cols <- function(x, geometry, names = c("x","y")) {
@@ -38,9 +37,10 @@ load(here::here("data/bound_sg.rdata"))
 load(here::here("data/HogIslandBaySeagrass.rdata"))
 load(here::here("data/processed_dem.rdata"))
 
+# the hack----
 hack <- -2500
 
-# process----
+# process spatial data----
 train_poly1 <- hi_sg %>% 
   filter(YEAR %in% c(2017, 2018)) %>% 
   group_by(year = YEAR) %>% 
@@ -58,6 +58,7 @@ train_poly <-
   bind_rows(.,train_poly1 %>% filter(year == 2018)) %>% 
   dplyr::select(-year)
 
+# these polygons represent 2017 and 2018 seagrass boundaries
 ggplot() +
   geom_sf(data = train_poly)
 
@@ -89,13 +90,11 @@ syn_full1 %<>%
   mutate(x = x/1000,
          y = y/1000)
 
-syn_dat <- syn_full %>% slice(1:80)
-head(syn_dat)
-syn_dat_tprs <- syn_full1 %>% slice(1:80)
-head(syn_dat_tprs)
+syn_dat <- syn_full
+syn_dat_gp <- syn_full1 %>%  mutate(year = factor(year))
 
-# fit variogram
-kg_df <- syn_dat_tprs %>% 
+# fit variogram and get sill
+kg_df <- syn_dat_gp %>% 
   filter(year == 2017)
 coordinates(kg_df) = ~x+y
 crs(kg_df) <- "+proj=utm +zone=18 +datum=WGS84 +units=m +no_defs"
@@ -103,28 +102,20 @@ v <- variogram(shoots~1, data = kg_df)
 vfit <- fit.variogram(v, vgm("Gau"))
 plot(v, vfit)
 
-# 
-# ggplot() +
-#   geom_sf(data = train_poly) +
-#   geom_point(data = syn_dat, aes(x = x, y = y)) 
 
-# geom_point(data = syn_dat, aes(x= x, y = y, color = shoots))
+# smooth with GP----
 
-# sg_bound %>% 
-#   filter(str_detect(SiteName, "HI")) %>% 
-#   group_by(year, vims_pres) %>% 
-#   dplyr::summarise(n = n())
+# Use GP to model how shoot density changes over space
+# between 2017 nd 2018
 
-# smooth with TPRSs----
-
-# Use TPRS to model how shoot density changes spatially
-syn_dat_tprs %<>% mutate(year = factor(year))
-m1 <- gam(shoots ~ s(x, y, by = year, bs = "gp", m = c(1, 30000)), data = syn_dat_tprs, method = "REML",
+m1 <- gam(shoots ~ s(x, y, by = year, bs = "gp", m = c(1, 30000)), data = syn_dat_gp, method = "REML",
           family = tw(link = "log"))
-m1.2 <- gam(shoots ~ s(x, y, by = year, bs = "gp", m = c(1, 30000)), data = syn_dat_tprs, method = "REML")
+m1.2 <- gam(shoots ~ s(x, y, by = year, bs = "gp", m = c(1, 30000)), data = syn_dat_gp, method = "REML")
 summary(m1)
 AIC(m1, m1.2)
 gratia::appraise(m1)
+
+# get prediction grid ----
 train_poly1 %<>% mutate(geometry = geometry/1000)
 
 r <- raster(extent(train_poly1),
@@ -140,14 +131,14 @@ pdf2 <- fasterize(train_poly1 %>% filter(year == 2018), r) %>%
   as.data.frame() %>% 
   mutate(year = 2018)
 
+#new data for prediction
 pdf <- bind_rows(pdf1, pdf2) %>% 
-  mutate(year = factor(year)) #%>% 
-  # mutate(x = x/1000,
-         # y = y/1000)
+  mutate(year = factor(year))
 
 ##predictions
 pdata <- pdf %>% mutate(shoots = predict(m1, newdata = pdf, 
                                          type = "response"))
+# intersect predictions with polygons
 tmp <- pdata %>% 
   st_as_sf(coords = c("x","y"), 
            crs = st_crs(train_poly1)) %>% 
@@ -161,8 +152,12 @@ ggplot() +
   geom_sf(data = train_poly1, fill = "transparent") +
   viridis::scale_fill_viridis(na.value = NA) +
   facet_wrap(~year) +
-  geom_point(data = syn_dat_tprs,
-             aes(x = x, y = y, size = shoots))
+  geom_point(data = syn_dat_gp,
+             aes(x = x, y = y, 
+                 alpha = shoots)) +
+  theme(axis.title = element_blank(),
+        axis.text = element_text(size = 5)) +
+  labs(alpha = "Known", fill = "Pred")
 
 # soap-film smoothing----
 
@@ -215,6 +210,8 @@ grid <-
   dplyr::rename(x = X, y = Y) %>% 
   mutate(x = x/1000,
          y = y/1000) %>% 
+  
+  # add rows in the "peninsula" section of the meadow
   add_row(x = c(435.3, 432.7, 435.2, 432.82),
           y = c(4141.1, 4138.864, 4141.3, 4138.6))
 
@@ -227,13 +224,6 @@ ggplot() +
 
 
 # fit the model
-# m2 <- gam(shoots ~ s(year, bs = "re") + 
-#                      s(x, y,
-#                      bs = "so",
-#                      xt = list(bnd = bound)),
-#           data = syn_dat, method = "REML",
-#           knots = grid)
-
 m3 <- gam(shoots ~  s(x, y,
               bs = "so",
               xt = list(bnd = bound, nmax = 500)),
@@ -242,24 +232,13 @@ m3 <- gam(shoots ~  s(x, y,
 
 save(bound, syn_dat, grid, file = here::here("data/soap_data.rdata"))
 
-m3 <- gam(shoots ~  s(x, y,
-                      bs = "sf",
-                      xt = list(bnd = bound, nmax = 500)),
-          data = syn_dat, method = "REML",
-          knots = grid)
 
 summary(m3)
-AIC(m1, m2, m3)
 gratia::draw(m3)
 gratia::appraise(m3)
 
-lims <- apply(crds, 2, range)
-ylim <- lims[,2]
-xlim <- lims[,1]
 
-plot(m3, asp = 1, ylim = ylim, 
-     xlim = xlim, se = FALSE, scheme = 2, main = "")
-
+# create new prediction grid for soap film model
 crds <- st_coordinates(train_poly)[,c("X","Y")]
 crds[,1] <- crds[,1]/1000
 crds[,2] <- crds[,2]/1000
@@ -274,7 +253,7 @@ names(pdata_grid) <- c("x","y","year")
 
 pdata2 <- transform(pdata_grid, shoots = predict(m3, newdata = pdata_grid,
                                                         type = "response"))
-
+ 
 (soap <- 
   ggplot() +
   geom_raster(data = pdata2, aes(x = x, y = y, fill = shoots)) +
@@ -294,7 +273,7 @@ pdata2 <- transform(pdata_grid, shoots = predict(m3, newdata = pdata_grid,
   labs(fill = "Shoots m<sup>-2</sup>",
        title = "Soap film smooth"))
 
-(tprs <- 
+(gp <- 
   ggplot() +
   geom_raster(data = tmp, aes(x = x, y = y, fill = shoots)) +
   geom_sf(data = train_poly1, fill = "transparent") +
@@ -314,59 +293,11 @@ pdata2 <- transform(pdata_grid, shoots = predict(m3, newdata = pdata_grid,
   labs(subtitle = "Kriging smooth",
        fill = "Shoots m<sup>-2</sup>"))
 
-soap + tprs + plot_layout(guides = "collect") & theme(legend.position = 'bottom')
+# soap + gp + plot_layout(guides = "collect") & theme(legend.position = 'bottom')
 
-ggsave(filename = here::here("sdm_comparison.png"),
-       dpi = 200, width = 7, height = 3)
+# ggsave(filename = here::here("sdm_comparison.png"),
+#        dpi = 200, width = 7, height = 3)
 
-tprs_test_pred2 <- predict(m1,newdata=syn_dat_tprs, type = "response")
-soap_test_pred2 <- predict(m3,newdata=syn_dat, type = "response")
-
-(is_pred <- 
-    AIC(m1, m3) %>% 
-    mutate(RMSE = c(sqrt(mean((syn_dat_tprs$shoots - tprs_test_pred2)^2)),
-                    sqrt(mean((syn_dat$shoots - soap_test_pred2)^2)))))
-
-row.names(oos_pred) <- c("Kriging","Soap-film")
-
-sf_pred <- syn_dat %>% 
-  mutate(soap_test_pred = as.numeric(predict(m3, newdata = ., type = "response")))
-
-tprs_pred <- syn_dat_tprs %>% 
-  mutate(tprs_test_pred = as.numeric(predict(m1, newdata = ., type = "response")))
-
-bind_rows(sf_pred, tprs_pred) %>%
-  gather(var, value, -x,-y,-shoots,-year) %>% 
-  ggplot() +
-    geom_point(aes(x = shoots, y = value)) +
-    facet_wrap(year~var, scales = "free") +
-    geom_abline(aes(intercept = 0, slope = 1))
-
-
-kg_df <- syn_dat_tprs %>% 
-  filter(year == 2017)
-coordinates(kg_df) = ~x+y
-gridded(pdf1) = ~x+y
-crs(pdf1) <- "+proj=utm +zone=18 +datum=WGS84 +units=m +no_defs"
-crs(kg_df) <- "+proj=utm +zone=18 +datum=WGS84 +units=m +no_defs"
-v <- variogram(shoots~1, data = kg_df)
-vfit <- fit.variogram(v, vgm("Sph"))
-plot(v, vfit)
-# ordinary kriging:
-x <- krige(shoots~1, kg_df, pdf1, model = vfit, beta = 235.56)
-spplot(x["var1.pred"], main = "ordinary kriging predictions")
-
-m1 <- gam(shoots ~ s(x, y, k = 40, bs = "gp", 
-                     m = c(1, 31623.84)), data = syn_dat_tprs %>% 
-            filter(year == 2017), method = "REML")
-pred_df <- x["var1.pred"] %>% 
-  as.data.frame() %>% 
-  mutate(gam_pred = predict(m1, newdata= .)) %>% 
-  gather(var, pred, -x, -y)
-
-ggplot(pred_df) +
-  geom_raster(aes(x = x, y = y, 
-                  fill = pred)) +
-  facet_wrap(~var)
-  
-
+# check out model-comparison.R for a thorough comparison of model
+# prediction between the GP, soap film, TPRS, etc. This is limited
+# to within year comparisons only.
