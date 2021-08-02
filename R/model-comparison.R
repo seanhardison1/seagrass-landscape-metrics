@@ -21,7 +21,7 @@ load(here::here("data/processed_dem.rdata"))
 
 
 # process----
-y <- 2018
+y <- 2017
 # seagrass meadow boundary
 train_poly1 <- hi_sg %>% 
   filter(YEAR %in% y) %>% 
@@ -67,7 +67,7 @@ bound <- list(as.list.data.frame(crds))
 # knots----
 grid_int <- 
   train_poly1 %>% 
-  st_make_grid(n=c(10,10), 
+  st_make_grid(n=c(9,9), 
                what = "centers", 
                square=TRUE) %>% 
   st_intersection(.,train_poly1)
@@ -77,12 +77,14 @@ grid <-
   st_coordinates(grid_out) %>% 
   as_tibble() %>% 
   dplyr::rename(x = X, y = Y) %>% 
-  add_row(x = c(435300,  435200),
-          y = c(4141100,  4141300))
+  # add_row(x = c(435300,  435200),
+  #         y = c(4141100,  4141300))
+add_row(x = c(435300, 435450),
+        y = c(4141000, 4140800))
 
-# ggplot(grid) +
-#   geom_point(aes(x = x, y = y)) +
-#   geom_sf(data = train_poly1, fill = "transparent")
+ggplot(grid) +
+  geom_point(aes(x = x, y = y)) +
+  geom_sf(data = train_poly1, fill = "transparent")
 
 # plot(bound)
 # points(grid$x, grid$y)
@@ -109,7 +111,7 @@ for(i in 1:10){
   
   # soap film
   soap_mod <- gam(shoots ~  s(x, y,
-                              bs = "so", k = 7,
+                              bs = "so",
                               xt = list(bnd = bound, nmax = 500)),
                   data = trainData, method = "REML",
                   knots = grid)
