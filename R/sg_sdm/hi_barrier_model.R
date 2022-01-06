@@ -36,6 +36,16 @@ vims_sg_proc %<>%
   sf::st_transform(crs = st_crs(coor_rs)) %>% 
   st_intersection(.,hi)
 
+# read in DEM
+dem_raw <- raster(here::here("data/V2_topobathy_tif.tif"))
+# dem_raw <- projectRaster(dem_raw, crs = coor_rs)
+dem <- mask( crop( dem_raw,y = extent(hi %>% 
+                                        st_transform("+proj=utm +zone=18 +datum=NAD83 +units=m +no_defs")) ), hi %>% 
+               st_transform("+proj=utm +zone=18 +datum=NAD83 +units=m +no_defs"))
+dem[dem > 0 ] <- NA
+dem <- aggregate(dem, fact = 8.5, fun = mean)
+dem <- projectRaster(dem, crs = coor_rs)
+
 # Center and rescale function
 center.and.rescale <- function(x) {
   x <- x - mean(x, na.rm = T)
@@ -55,11 +65,14 @@ plot_map <- function(dat, column) {
 sg_df <- sg_bound %>% 
   filter(meadow == "HI") %>% 
   st_transform(st_crs(coor_rs)) %>% 
+  {. ->> sg_sf} %>% 
   dream::sfc_as_cols() %>% 
   st_set_geometry(NULL) %>% 
   dplyr::rename(shoots = SHOOTS) %>% 
   mutate(shoots_norm = center.and.rescale(shoots),
-         year = as.numeric(as.character(year)))
+         year = as.numeric(as.character(year)),
+         bathy = raster::extract(dem, y = sg_sf %>% as_Spatial()))
+
 
 rast_res <- 0.025
 # template raster
@@ -105,9 +118,13 @@ for (i in unique(vims_sg_proc$year)){
   
 }
 
-ggplot(vcr_sg_df) +
-  geom_tile(aes(y = y, x = x, fill = vims_dens)) +
-  facet_wrap(~year)
+vcr_sg_df$bathy <- rep(raster::extract(dem, rasty %>% 
+                  as("SpatialPixelsDataFrame")),
+      length(unique(vims_sg_proc$year)))
+
+# ggplot(vcr_sg_df) +
+#   geom_tile(aes(y = y, x = x, fill = vims_dens)) +
+#   facet_wrap(~year)
 
 # read polygons for mesh creation
 file_vec <- list.files(here::here("data/vcr_barrier_model_polygons/"))
@@ -173,20 +190,19 @@ mod_df <-  sg_df %>% filter(!is.na(x),
          year = as.numeric(as.character(year)))
 
 vcr_spde <- sdmTMB::make_mesh(data = mod_df, xy_cols = c("x","y"),mesh = mesh)
-vcr_spde <- add_barrier_mesh(vcr_spde, land_sf)
+# vcr_spde <- add_barrier_mesh(vcr_spde, land_sf)
 
 # fit model
 mod <- 
-  sdmTMB(shoots ~ vims_dens, 
+  sdmTMB(shoots ~ 0 + vims_dens + s(bathy, k = 4) + factor(year), 
          data = mod_df, 
          spde = vcr_spde,
          # extra_time = c(2013L, 2014L, 2016L),
-         fields = "AR1",
+         # fields = "AR1",
          time = "year",
          family = tweedie(link = "log"))
 summary(mod)
 hist(residuals(mod))
-
 
 
 t <- raster::extract(bar_rast, vcr_sg_df %>% 
@@ -200,5 +216,43 @@ predictions <- predict(mod, newdata = pred_df)
 plot_map(predictions %>% 
            filter(!is.na(pres),
                   vims_dens != 0), "exp(est)") +
-  scale_fill_viridis_c(trans = "sqrt") +
+  # scale_fill_viridis_c(trans = "sqrt") +
   ggtitle("Prediction (fixed effects + all random effects)") 
+
+nd <- tibble(bathy = seq(min(mod_df$bathy), max(mod_df$bathy), 
+                         length.out = 100),
+         vims_dens = mean(mod_df$vims_dens),
+         year = 2012)
+
+sg_df_pred <- predict(mod, newdata = nd, type = "response", se_fit = TRUE, re_form = NA)
+(twed_pred <- 
+    ggplot(sg_df_pred) +
+    geom_point(data = mod_df, aes(x = bathy, y= shoots)) +
+    geom_line(aes(x = bathy, y = exp(est))) +
+    theme_bw() +
+    labs(y = "Shoot canopy height (cm)",
+         x = "Elevation (m, NAVD88)") +
+    theme(axis.title.y = element_markdown(),
+          axis.title.x = element_markdown()))
+
+nd <- tibble(vims_dens = seq(min(mod_df$vims_dens), max(mod_df$vims_dens), 
+                         length.out = 100),
+             bathy = mean(mod_df$bathy),
+             year = 2012)
+
+sg_df_pred <- predict(mod, newdata = nd, type = "response", se_fit = TRUE, re_form = NA)
+(twed_pred <- 
+    ggplot(sg_df_pred) +
+    geom_point(data = mod_df, aes(x = vims_dens, y= shoots)) +
+    geom_line(aes(x = vims_dens, y = exp(est))) +
+    theme_bw() +
+    labs(y = "Shoot canopy height (cm)",
+         x = "Elevation (m, NAVD88)") +
+    theme(axis.title.y = element_markdown(),
+          axis.title.x = element_markdown()))
+
+pdf <- predict(mod)
+ggplot(pdf) +
+  geom_point(aes(y = exp(est), x = shoots)) +
+  geom_abline(slope = 1, intercept = 0) +
+  facet_wrap(~year)
