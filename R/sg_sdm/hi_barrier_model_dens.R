@@ -215,3 +215,4 @@ mod_df_dens2 %>%
   dplyr::summarise(shoots = mean(shoots)) %>% 
   ggplot() + 
     geom_line(aes(x = year, y = shoots))
+
