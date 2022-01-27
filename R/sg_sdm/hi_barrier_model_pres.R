@@ -178,7 +178,7 @@ ggplot(vcr_sg_df) +
 
 
 
-yrs <- c(2007:2012, 2015, 2017:2018)
+yrs <- c(2017)
 # yrs <- 2007:2012
 
 mod_df <-  vcr_sg_df %>% filter(year %in% yrs) %>% 
@@ -188,17 +188,28 @@ vcr_spde <- sdmTMB::make_mesh(data = mod_df, xy_cols = c("x","y"),mesh = mesh)
 
 plot(vcr_spde)
 
-
-mod <- 
-  sdmTMB(vims_pres ~ 1, 
-         data = mod_df, 
+mod <-
+  sdmTMB(vims_pres ~ 1,
+         data = mod_df,
          spde = vcr_spde,
-         extra_time = c(2013L, 2014L, 2016L),
-         fields = "AR1",
+         # extra_time = c(2013L, 2014L, 2016L),
+         # fields = "AR1",
          # previous_fit = mod,
-         time = "year",
+         # time = "year",
          # spatial_trend = TRUE,
          family = binomial())
+
+
+# mod <-
+#   sdmTMB(vims_pres ~ 1,
+#          data = mod_df,
+#          spde = vcr_spde,
+#          extra_time = c(2013L, 2014L, 2016L),
+#          fields = "AR1",
+#          # previous_fit = mod,
+#          time = "year",
+#          # spatial_trend = TRUE,
+#          family = binomial())
 
 vcr_spde_bar <- add_barrier_mesh(vcr_spde, bar_sf)
 bar_mod <- 

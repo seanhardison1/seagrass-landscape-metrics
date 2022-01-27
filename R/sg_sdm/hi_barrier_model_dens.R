@@ -46,29 +46,35 @@ vcr_yr <-
   dplyr::select(vims_dens, year) %>% 
   group_by(year) %>% 
   summarise()
+# 
+ggplot() +
+  geom_sf(data = vcr_yr %>%
+            filter(year %in% yrs),
+          fill = "green", alpha = 0.5) +
+  geom_sf(data =barrier_sf, alpha = 0.5, 
+          fill = "purple") +
+  facet_wrap(~year) +
+  geom_point(data = mod_df_dens %>%
+               filter(shoots > 10,
+                      year %in% yrs),
+             aes(x = x, y = y,
+                 color = shoots),
+             size = 0.5,
+             color = "black") +
+  theme_minimal() +
+  theme(axis.title = element_blank(),
+        axis.text = element_blank()) +
+  scale_color_distiller(palette = "RdBu",
+                        type = "div") 
 
 
-# prediction function
-plot_map <- function(dat, column, vcr_sp = vcr_yr) {
-  ggplot() +
-    geom_raster(data = dat, aes_string("x", "y", fill = column)) +
-    geom_sf(data = vcr_sp, fill = "transparent", color = "purple") +
-    facet_wrap(~year) +
-    coord_sf()  +
-    theme(axis.text = element_blank(),
-          axis.title = element_blank(),
-          legend.position = "bottom") +
-    scale_fill_gradientn(colors = pals::ocean.deep(10)) +
-    ecodata::theme_map()
-  
-}
 
-rast_res <- 0.1
+
+rast_res <- 0.01
 # template raster
 r <- raster(extent(hi),
             res = rast_res,
             crs =coor_rs)
-
 
 # read polygons for mesh creation
 file_vec <- list.files(here::here("data/vcr_barrier_model_polygons/"))
@@ -100,7 +106,7 @@ vcr_sp <-
   filter(year == 2018, vims_dens > 0) %>% 
   dplyr::select(vims_dens) %>% 
   summarise() %>% 
-  st_buffer(.,0.1) %>% 
+  st_buffer(.,0.05) %>% 
   st_difference(land_sf) %>% 
   {. ->> bar_sf} %>% 
   as("Spatial")
@@ -120,7 +126,8 @@ num.tri = length(mesh$graph$tv[, 1])
 barrier.tri = base::setdiff(1:num.tri, water.tri)
 poly.barrier = inla.barrier.polygon(mesh, barrier.triangles = barrier.tri)
 plot(poly.barrier)
-
+barrier_sf <- as(poly.barrier, "sf")
+st_crs(barrier_sf) <- coor_rs
 
 mod_df_dens <- 
   sg_bound %>% 
@@ -129,7 +136,8 @@ mod_df_dens <-
   st_set_geometry(NULL) %>% 
   filter(meadow == "HI") %>% 
   dplyr::rename(site = SiteName,
-                shoots = SHOOTS)
+                shoots = SHOOTS) %>% 
+  mutate(year = as.numeric(as.character(year)))
 
 mod_df_dens %>% 
   group_by(year) %>% 
@@ -139,40 +147,107 @@ ggplot(mod_df_dens) +
   geom_point(aes(x = x, y = y, color = shoots)) +
   facet_wrap(~year)
 
-yrs <- c(2007:2018)
+yrs <- c(2017, 2018)
 mod_df_dens2 <- mod_df_dens %>% filter(year %in% yrs)
 vcr_spde <- sdmTMB::make_mesh(data =mod_df_dens2, xy_cols = c("x","y"),mesh = mesh)
 vcr_spde_bar <- add_barrier_mesh(vcr_spde, bar_sf)
+plot(vcr_spde_bar)
 
-bar_mod_dens <- 
-  sdmTMB(shoots ~ as.factor(year), 
+# AR1
+
+bar_mod_dens_ar1 <- 
+  sdmTMB(shoots ~ 
+           as.factor(vims_dens), 
          data = mod_df_dens2, 
          spde = vcr_spde_bar,
-         fields = "AR1",
+         spatial = "on",
          time = "year",
+         spatiotemporal = "AR1",
          family = tweedie())
-summary(bar_mod_dens)
+# summary(bar_mod_dens)
 
-mod_dens <- 
-  sdmTMB(shoots ~ as.factor(year), 
+mod_dens_ar1 <- 
+  sdmTMB(shoots ~ 
+           as.factor(vims_dens), 
          data = mod_df_dens2, 
          spde = vcr_spde,
-         fields = "AR1",
+         spatial = "on",
          time = "year",
+         spatiotemporal = "AR1",
          family = tweedie())
+
+# IID
+bar_mod_dens <- 
+  sdmTMB(shoots ~ 
+           as.factor(vims_dens), 
+         data = mod_df_dens2, 
+         spde = vcr_spde_bar,
+         spatial = "on",
+         time = "year",
+         spatiotemporal = "IID",
+         family = tweedie())
+# summary(bar_mod_dens)
+
+mod_dens <- 
+  sdmTMB(shoots ~ 
+           as.factor(vims_dens), 
+         data = mod_df_dens2, 
+         spde = vcr_spde,
+         spatial = "on",
+         time = "year",
+         spatiotemporal = "IID",
+         family = tweedie())
+
+# model compare
+AIC(bar_mod_dens, mod_dens)
 
 bar_rast_df <- 
   bar_rast %>% 
   as("SpatialPixelsDataFrame") %>% 
   as.data.frame() %>% 
-  tidyr::expand_grid(year = factor(2007:2018, levels = 2007:2018))
+  tidyr::expand_grid(vims_dens = unique(mod_df_dens2$vims_dens),
+                     year = yrs) %>% 
+  dplyr::select(-layer)
 
-bar_mod_fc <- sdmTMB:::predict.sdmTMB(bar_mod_dens, newdata = bar_rast_df, return_tmb_object = TRUE)
-mod_fc <- sdmTMB:::predict.sdmTMB(mod_dens, newdata = bar_rast_df, return_tmb_object = TRUE)
+bar_mod_fc <- sdmTMB:::predict.sdmTMB(bar_mod_dens, newdata = bar_rast_df)
+mod_fc <- sdmTMB:::predict.sdmTMB(mod_dens, newdata = bar_rast_df)
 
-plot_map(dat = bar_mod_fc$data, column = "exp(est)")
+# prediction function
+plot_map <- function(dat, column, vcr_sp = vcr_yr) {
+  ggplot() +
+    geom_raster(data = dat, aes_string("x", "y", fill = column)) +
+    geom_sf(data = vcr_sp %>% 
+              filter(year %in% unique(dat$year)), fill = "transparent", color = "purple") +
+    coord_sf()  +
+    facet_wrap(~year) +
+    theme(axis.text = element_blank(),
+          axis.title = element_blank(),
+          legend.position = "bottom") +
+    scale_fill_gradientn(colors = pals::ocean.deep(10),
+                         breaks = c(0, 200, 400, 600),
+                         limits = c(0,600)) +
+    theme_minimal()
+  
+}
 
-dens_index <- sdmTMB::get_index(bar_mod_fc, bias_correct = TRUE)
+plot_map(dat = bar_mod_fc, column = "exp(est)") +
+  labs(fill = "Density\n(shoots 10 m<sup>-2</sup>)") +
+  theme(legend.title = element_markdown(),
+        axis.title = element_blank(),
+        axis.text = element_blank(),
+        legend.position = "bottom")
+
+plot_map(dat = mod_fc, column = "exp(est)") +
+  labs(fill = "Density\n(shoots 10 m<sup>-2</sup>)") +
+  theme(legend.title = element_markdown(),
+        axis.title = element_blank(),
+        axis.text = element_blank(),
+        legend.position = "bottom")
+  
+AIC(bar_mod_dens, bar_mod_dens_ar1,
+    mod_dens, mod_dens_ar1)
+
+# dens_index <- sdmTMB::get_index(bar_mod_fc, bias_correct = TRUE)
 
 dens_index %>% 
   mutate(year = as.numeric(as.character(year))) %>% 
